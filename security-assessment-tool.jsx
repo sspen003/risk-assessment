@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { AlertTriangle, Shield, Lock, Eye, Building, CheckCircle, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, Shield, Lock, Eye, Building, CheckCircle, Download, ChevronDown, ChevronUp, Camera } from "lucide-react";
 
 const FACILITY_TYPES = [
   "Power Generation",
@@ -159,7 +159,7 @@ const THREAT_CATEGORIES = [
 const THREAT_CONTROL_MAP = {
   "Material theft": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 12 },
   "Equipment theft": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 10 },
-  "Opportunistic vandalism": { controls: ["fencing", "signage", "lighting", "cctv", "intrusion", "monitoring"], duration: 6 },
+  "Opportunistic vandalism": { controls: ["fencing", "signage", "lighting", "cctv", "intrusion", "monitoring"], duration: 5 },
   "Arson / Intentional Fire": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "enclosures"], duration: 3 },
   "Protest-related damage": { controls: ["fencing", "bollards", "gates", "cctv", "intrusion", "monitoring", "security"], duration: 20 },
   "Curiosity and exploration": { controls: ["fencing", "signage", "gates", "cctv", "intrusion", "monitoring"], duration: 30 },
@@ -168,7 +168,7 @@ const THREAT_CONTROL_MAP = {
   "Surveillance and probing": { controls: ["fencing", "cctv", "intrusion", "monitoring"], duration: 15 },
   "Drone-enabled reconnaissance": { controls: ["cctv", "monitoring", "drone"], duration: 10 },
   "Insider threat": { controls: ["cardReaders", "visitorMgmt", "credentialAcct", "cctv", "intrusion", "monitoring", "locks"], duration: null },
-  "Coordinated physical attack": { controls: ["fencing", "bollards", "gates", "lighting", "cctv", "intrusion", "monitoring", "security", "enclosures", "locks", "redundancy", "communications"], duration: 20 },
+  "Coordinated physical attack": { controls: ["fencing", "bollards", "gates", "lighting", "cctv", "intrusion", "monitoring", "security", "enclosures", "locks", "redundancy", "communications"], duration: 30 },
   "Vehicle strikes": { controls: ["bollards", "fencing", "signage"], duration: 0 },
   "Natural hazards": { controls: ["enclosures", "redundancy", "communications"], duration: null },
   "Hazardous materials release": { controls: ["enclosures", "locks", "monitoring", "communications"], duration: null }
@@ -207,8 +207,7 @@ const THREAT_ASSET_MAP = {
     "Insider threat": ["Power Transformers", "High-Voltage Switchgear"],
     "Coordinated physical attack": ["Power Transformers", "High-Voltage Switchgear"],
     "Vehicle strikes": ["Power Transformers", "High-Voltage Switchgear"],
-    "Natural hazards": ["Transmission Lines & Towers", "Distribution Feeders & Circuits", "Power Transformers", "High-Voltage Switchgear"],
-    "Hazardous materials release": ["Power Transformers"]
+    "Natural hazards": ["Transmission Lines & Towers", "Distribution Feeders & Circuits", "Power Transformers", "High-Voltage Switchgear"]
   },
   "Oil & Gas (Upstream / Midstream / Downstream)": {
     "Material theft": ["Production & Processing Units", "Storage Tanks & Tank Farms", "Pipeline Interconnects & Transfer Systems"],
@@ -275,8 +274,7 @@ const THREAT_ASSET_MAP = {
     "Insider threat": ["Inverters & Power Conversion Systems", "Energy Storage Systems (BESS)", "Grid Interconnection & Substation"],
     "Coordinated physical attack": ["Generation Arrays (Solar Panels / Wind Turbines)", "Energy Storage Systems (BESS)", "Grid Interconnection & Substation"],
     "Vehicle strikes": ["Generation Arrays (Solar Panels / Wind Turbines)", "Grid Interconnection & Substation"],
-    "Natural hazards": ["Generation Arrays (Solar Panels / Wind Turbines)", "Inverters & Power Conversion Systems", "Energy Storage Systems (BESS)", "Grid Interconnection & Substation"],
-    "Hazardous materials release": ["Energy Storage Systems (BESS)"]
+    "Natural hazards": ["Generation Arrays (Solar Panels / Wind Turbines)", "Inverters & Power Conversion Systems", "Energy Storage Systems (BESS)", "Grid Interconnection & Substation"]
   },
   "Water / Wastewater": {
     "Material theft": ["Pumping Stations", "Treatment Process Systems", "Chemical Storage & Handling Systems"],
@@ -347,7 +345,7 @@ const ADJACENCY_KEYWORDS = [
   { keywords:["pipeline","substation","transmission line","power plant","water treatment","pumping station","generating station","lng","refinery","critical infrastructure"], type:"critical_infra" },
 ];
 
-const BLANK_CONTROL = { score: 1, notes: "" };
+const BLANK_CONTROL = { score: 0, notes: "" };
 
 function getCritTier(score) {
   const n = parseInt(score) || 1;
@@ -377,7 +375,8 @@ const INITIAL_STATE = {
     nearbyEntities: [],
     entityLookupStatus: "idle",
   },
-  criticality: { assetPresence: {}, assetScores: {} },
+  criticality: { assetPresence: {}, assetScores: {}, assetPhotos: {} },
+  controlPhotos: {},
   controls: {
     perimeter: {
       fencing:  { ...BLANK_CONTROL },
@@ -413,7 +412,9 @@ const INITIAL_STATE = {
 };
 
 function getCtrlRating(n) {
+  if (n === "N/A" || n === undefined || n === null) return { label: "Not Rated", tc: "text-gray-500", bg: "bg-gray-100" };
   const s = parseFloat(n);
+  if (isNaN(s)) return { label: "Not Rated", tc: "text-gray-500", bg: "bg-gray-100" };
   if (s >= 5.0) return { label: "Robust",      tc: "text-green-700",  bg: "bg-green-100"  };
   if (s >= 4.0) return { label: "Strong",      tc: "text-green-600",  bg: "bg-green-50"   };
   if (s >= 3.0) return { label: "Adequate",    tc: "c-text-teal",   bg: "c-bg-light"    };
@@ -486,26 +487,19 @@ function calculateControlEffectiveness(threatName, selectedControlKeys, controls
 }
 
 function avgScore(controls) {
-  const vals = Object.values(controls).map((c) => c.score);
+  const vals = Object.values(controls).map((c) => c.score).filter(s => s > 0);
+  if (vals.length === 0) return "N/A";
   return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
 }
 
 export default function App() {
   const [step, setStep] = useState(0);
   const [d, setD] = useState(() => {
-    try {
-      const saved = localStorage.getItem("psr-assessment-data");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Merge with INITIAL_STATE to pick up any new fields from code updates
-        return { ...INITIAL_STATE, ...parsed, facility: { ...INITIAL_STATE.facility, ...parsed.facility }, controls: { ...INITIAL_STATE.controls, ...parsed.controls } };
-      }
-    } catch {}
+    // Always start fresh — clear any previous session data
+    try { localStorage.removeItem("psr-assessment-data"); } catch {}
     return INITIAL_STATE;
   });
-  const [showResumePrompt, setShowResumePrompt] = useState(() => {
-    try { return !!localStorage.getItem("psr-assessment-data"); } catch { return false; }
-  });
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
   const clearSavedData = () => { try { localStorage.removeItem("psr-assessment-data"); } catch {} setD(INITIAL_STATE); setShowResumePrompt(false); };
   const [open, setOpen] = useState({});
   const toggle = (k) => setOpen((p) => ({ ...p, [k]: !p[k] }));
@@ -529,6 +523,31 @@ export default function App() {
         assetPresence: { ...p.criticality.assetPresence, [asset]: present },
       },
     }));
+
+  const handleAssetPhotoUpload = (asset, file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setD((p) => ({
+        ...p,
+        criticality: {
+          ...p.criticality,
+          assetPhotos: { ...(p.criticality.assetPhotos || {}), [asset]: file.name },
+        },
+      }));
+    };
+    if (file) reader.readAsDataURL(file);
+  };
+
+  const handleControlPhotoUpload = (controlKey, file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setD((p) => ({
+        ...p,
+        controlPhotos: { ...(p.controlPhotos || {}), [controlKey]: file.name },
+      }));
+    };
+    if (file) reader.readAsDataURL(file);
+  };
 
   const setCtrl = (cat, ctrl, field, val) =>
     setD((p) => ({
@@ -814,7 +833,7 @@ export default function App() {
       const cat=ENTITY_CATEGORIES[e.type]||{};
       return `<tr>
         <td><strong>${e.name||e.label}</strong><br><span style="color:#6b7280;font-size:0.85em;">${e.label}</span></td>
-        <td>${e.fromNotes?'Assessor notes':e.distance?`Detected (${e.distance}m)`:'Detected'}</td>
+        <td>${e.fromNotes?'Assessor notes':e.distance?`Detected (${Math.round(e.distance * 3.28084)}ft)`:'Detected'}</td>
         <td>${(cat.increasedThreats||[]).join("<br>")||'—'}</td>
         <td>${(cat.decreasedThreats||[]).join("<br>")||'—'}</td>
         <td style="font-size:0.9em;">${cat.note||''}</td>
@@ -833,10 +852,10 @@ export default function App() {
   <h2>Executive Summary</h2>
   <p>This assessment identified <strong>${sortedRisks.length} total risks</strong> across the facility. Organization risk tolerance is set to <strong>${riskToleranceValue}/5</strong>; <strong>${exceedsToleranceCount}</strong> risk${exceedsToleranceCount !== 1 ? 's' : ''} exceed${exceedsToleranceCount === 1 ? 's' : ''} this threshold.</p>
   <ul>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 10).length} EXTREME</strong> risks (≥10.0) - Immediate treatment required</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 7 && r.residualRisk < 10).length} HIGH</strong> risks (7.0-9.9) - Treatment plan required</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 4 && r.residualRisk < 7).length} MODERATE</strong> risks (4.0-6.9) - Monitor and consider treatment</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk < 4).length} LOW</strong> risks (<4.0) - Accept or minimal controls</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 10).length} EXTREME</strong> risks (≥10.0/25) - Immediate treatment required</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 7 && r.residualRisk < 10).length} HIGH</strong> risks (7.0-9.9/25) - Treatment plan required</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 4 && r.residualRisk < 7).length} MODERATE</strong> risks (4.0-6.9/25) - Monitor and consider treatment</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk < 4).length} LOW</strong> risks (<4.0/25) - Accept or minimal controls</li>
   </ul>
 
   ${highPri.length > 0 ? `
@@ -848,7 +867,7 @@ export default function App() {
     <div class="risk-${r.riskLevel.toLowerCase()}">
       <h3>#${i+1} ${r.threat} - ${r.riskLevel}${r.exceedsTolerance ? ' <span style="background:#dc2626;color:white;padding:2px 8px;border-radius:12px;font-size:0.7em;">EXCEEDS TOLERANCE</span>' : ''}</h3>
       ${flagsHtml}
-      <p><strong>Residual Risk Score:</strong> ${r.residualRisk.toFixed(2)} = (${r.maxCrit} × ${r.likelihood}) / Control Effectiveness</p>
+      <p><strong>Residual Risk Score:</strong> ${r.residualRisk.toFixed(2)} / 25 = (${r.maxCrit} × ${r.likelihood}) / Control Effectiveness</p>
       ${r.treatment ? `<p><strong>Treatment Plan:</strong> ${r.treatment}</p>` : ''}
       ${r.estimatedCost ? `<p><strong>Estimated Cost:</strong> ${r.estimatedCost}</p>` : ''}
     </div>
@@ -972,8 +991,12 @@ export default function App() {
     a.click();
   };
 
-  const catScores = ["perimeter","access","detection","hardening","response"].map((c) => parseFloat(avgScore(d.controls[c])));
-  const overallCtrl = (catScores.reduce((a, b) => a + b, 0) / catScores.length).toFixed(1);
+  const catScores = ["perimeter","access","detection","hardening","response"].map((c) => {
+    const score = avgScore(d.controls[c]);
+    return score === "N/A" ? 0 : parseFloat(score);
+  });
+  const validScores = catScores.filter(s => s > 0);
+  const overallCtrl = validScores.length > 0 ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : "N/A";
 
   // ── STEP 0: Facility Profile ──────────────────────────────────────────────
   const FacilityProfile = React.memo(() => {
@@ -999,18 +1022,25 @@ export default function App() {
           </select>
         </div>
         {d.facility.type && (CAPACITY_UNITS[d.facility.type] || []).length > 0 && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium c-text-navy mb-1">Capacity Value</label>
-              <input type="text" defaultValue={d.facility.capacityValue} placeholder="e.g., 500" onBlur={(e) => setFac("capacityValue", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded" />
+          <div>
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <label className="block text-sm font-medium c-text-navy mb-1">Capacity Value</label>
+                <input type="text" defaultValue={d.facility.capacityValue} placeholder="e.g., 500" onBlur={(e) => setFac("capacityValue", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium c-text-navy mb-1">Capacity Unit</label>
+                <select value={d.facility.capacityUnit} onChange={(e) => setFac("capacityUnit", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded">
+                  <option value="">Select unit...</option>
+                  {(CAPACITY_UNITS[d.facility.type] || []).map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium c-text-navy mb-1">Capacity Unit</label>
-              <select value={d.facility.capacityUnit} onChange={(e) => setFac("capacityUnit", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded">
-                <option value="">Select unit...</option>
-                {(CAPACITY_UNITS[d.facility.type] || []).map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
+            <p className="text-xs text-gray-500">
+              {(d.facility.type === "Power Generation" || d.facility.type === "Transmission & Distribution (Substations)")
+                ? "Higher capacity values generally indicate higher potential asset criticality."
+                : "Optional — capacity information provides context but does not directly affect criticality scoring for this sub-vertical."}
+            </p>
           </div>
         )}
         <div>
@@ -1117,8 +1147,8 @@ export default function App() {
               const responseTime = parseInt(val) || null;
               if (responseTime) {
                 let score;
-                if (responseTime <= 10) score = 5;
-                else if (responseTime <= 15) score = 4;
+                if (responseTime <= 5) score = 5;
+                else if (responseTime <= 10) score = 4;
                 else if (responseTime <= 20) score = 3;
                 else if (responseTime <= 30) score = 2;
                 else score = 1;
@@ -1151,11 +1181,12 @@ export default function App() {
             onClick={lookupNearbyEntities}
             disabled={d.facility.entityLookupStatus === "loading"}
             className="flex items-center gap-2 px-4 py-2 c-bg-teal c-disabled-gray text-white rounded font-medium text-sm whitespace-nowrap"
+            tabIndex={0}
           >
             {d.facility.entityLookupStatus === "loading" ? "Scanning nearby..." : "Find Nearby Entities"}
           </button>
           {d.facility.entityLookupStatus === "error" && <p className="text-xs text-red-600 mt-1">⚠️ Lookup failed. Verify your address is complete or check internet connection.</p>}
-          {d.facility.entityLookupStatus === "none"  && <p className="text-xs text-gray-500 mt-1">No significant risk entities detected within 600m. Use the Adjacencies field to document known nearby facilities manually.</p>}
+          {d.facility.entityLookupStatus === "none"  && <p className="text-xs text-gray-500 mt-1">No significant risk entities detected within 2,000 ft. Use the Adjacencies field to document known nearby facilities manually.</p>}
           {(d.facility.nearbyEntities||[]).length > 0 && (
             <div className="mt-3 border-2 c-border-light rounded p-3">
               <p className="text-xs font-semibold c-text-navy mb-2">Detected nearby — check all that are relevant to this assessment:</p>
@@ -1165,7 +1196,7 @@ export default function App() {
                     <input type="checkbox" checked={entity.confirmed} onChange={() => toggleNearbyEntity(entity.id)} className="w-4 h-4" />
                     <span className={entity.confirmed ? "c-text-navy font-medium" : "text-gray-500"}>
                       <span className="font-medium">{entity.name}</span>
-                      {entity.distance ? <span className="text-xs text-gray-400"> · {entity.distance}m</span> : ""}
+                      {entity.distance ? <span className="text-xs text-gray-400"> · {Math.round(entity.distance * 3.28084)}ft</span> : ""}
                       <span className="text-xs text-gray-500"> — {entity.label}</span>
                     </span>
                   </label>
@@ -1239,8 +1270,30 @@ export default function App() {
                   }>
                     <h3 className={"font-semibold " + (isAbsent ? "text-gray-400" : "c-text-navy")}>
                       {asset}
+                      {isPresent && (d.criticality.assetPhotos || {})[asset] && (
+                        <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">1 photo</span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-2">
+                      {isPresent && (
+                        <>
+                          <input
+                            type="file"
+                            id={`asset-photo-${asset}`}
+                            accept="image/*"
+                            onChange={(e) => e.target.files && handleAssetPhotoUpload(asset, e.target.files[0])}
+                            className="hidden"
+                          />
+                          <button
+                            onClick={() => document.getElementById(`asset-photo-${asset}`).click()}
+                            className="p-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-500"
+                            title="Attach photo"
+                            tabIndex={0}
+                          >
+                            <Camera className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => {
                           setAssetPresence(asset, isPresent ? undefined : true);
@@ -1252,6 +1305,7 @@ export default function App() {
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-white text-gray-500 border-gray-300 hover:border-green-400 hover:text-green-600")
                         }
+                        tabIndex={0}
                       >
                         ✓ Present
                       </button>
@@ -1263,11 +1317,12 @@ export default function App() {
                             ? "bg-gray-400 text-white border-gray-400"
                             : "bg-white text-gray-500 border-gray-300 hover:border-gray-400 hover:text-gray-600")
                         }
+                        tabIndex={0}
                       >
                         ✕ Not Present
                       </button>
                       {isPresent && (
-                        <button onClick={() => toggle("a_" + asset)} className="ml-1 text-gray-400 hover:text-gray-600">
+                        <button onClick={() => toggle("a_" + asset)} className="ml-1 text-gray-400 hover:text-gray-600" tabIndex={0}>
                           {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
                       )}
@@ -1454,11 +1509,11 @@ export default function App() {
                               </p>
                               <p className="c-text-teal">
                                 {!responseTime && "⚠️ Enter response time in Facility Profile to auto-calculate score"}
-                                {responseTime && responseTime <= 10 && "✓ Excellent - Score auto-set to 5 (Robust)"}
-                                {responseTime && responseTime > 10 && responseTime <= 15 && "✓ Good - Score auto-set to 4 (Strong)"}
-                                {responseTime && responseTime > 15 && responseTime <= 20 && "ⓘ Adequate - Score auto-set to 3"}
-                                {responseTime && responseTime > 20 && responseTime <= 30 && "⚠️ Weak - Score auto-set to 2"}
-                                {responseTime && responseTime > 30 && "⚠️ Ineffective - Score auto-set to 1"}
+                                {responseTime && responseTime <= 5 && "✓ Excellent — Score auto-set to 5 (Robust). Aligns with top-quartile urban response."}
+                                {responseTime && responseTime > 5 && responseTime <= 10 && "✓ Good — Score auto-set to 4 (Strong). Consistent with national urban average."}
+                                {responseTime && responseTime > 10 && responseTime <= 20 && "ⓘ Adequate — Score auto-set to 3. Typical suburban response window."}
+                                {responseTime && responseTime > 20 && responseTime <= 30 && "⚠️ Weak — Score auto-set to 2. Extended response; most attacks complete before arrival."}
+                                {responseTime && responseTime > 30 && "⚠️ Ineffective — Score auto-set to 1. Response time exceeds virtually all attack durations."}
                               </p>
                             </div>
                           )}
@@ -1521,6 +1576,32 @@ export default function App() {
                               className="w-full p-2 border-2 c-border-gray rounded text-xs"
                               rows={2}
                             />
+                          </div>
+                          <div className="mt-3">
+                            <label className="block text-xs font-medium c-text-navy mb-2">
+                              Optional: Attach Photo
+                              {(d.controlPhotos || {})[`${id}-${k}`] && (
+                                <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">1 photo</span>
+                              )}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="file"
+                                id={`control-photo-${id}-${k}`}
+                                accept="image/*"
+                                onChange={(e) => e.target.files && handleControlPhotoUpload(`${id}-${k}`, e.target.files[0])}
+                                className="hidden"
+                              />
+                              <button
+                                onClick={() => document.getElementById(`control-photo-${id}-${k}`).click()}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium"
+                                title="Attach photo of control"
+                                tabIndex={0}
+                              >
+                                <Camera className="w-4 h-4" />
+                                Choose Photo
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1767,7 +1848,10 @@ export default function App() {
                       <h3 className="font-semibold c-text-navy">{threat.name}</h3>
                       <p className="text-xs text-gray-600 mt-0.5">Likelihood: {threat.likelihood} | Evidence: {threat.evidence.join(", ") || "None"}</p>
                     </div>
-                    <div className={"px-3 py-1 rounded-full font-semibold text-sm " + riskLevel.bg + " " + riskLevel.tc}>{riskLevel.level}</div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className={"px-3 py-1 rounded-full font-semibold text-sm " + riskLevel.bg + " " + riskLevel.tc}>{riskLevel.level}</div>
+                      <div className="text-xs text-gray-600">{residualRisk.toFixed(2)} / 25</div>
+                    </div>
                   </div>
 
                   {/* Affected Assets */}
@@ -1842,7 +1926,7 @@ export default function App() {
                     </div>
                     <div className="text-center pt-2 border-t">
                       <span className="text-sm text-gray-600">Residual Risk Score: </span>
-                      <span className={"text-lg font-bold " + riskLevel.tc}>{residualRisk.toFixed(2)}</span>
+                      <span className={"text-lg font-bold " + riskLevel.tc}>{residualRisk.toFixed(2)} / 25</span>
                       <span className="text-xs text-gray-500 ml-2">({maxCrit} × {threat.likelihood}) / {controlEff.toFixed(2)}</span>
                     </div>
                   </div>
@@ -1856,66 +1940,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Treatment Plan */}
-                  {(riskLevel.level === "HIGH" || riskLevel.level === "EXTREME") && (
-                    <div className="space-y-3 border-t pt-3">
-                      <h4 className="font-medium c-text-navy text-sm">Treatment Plan Required</h4>
-                      <textarea
-                        key={`${threat.name}-treatment`}
-                        rows={2}
-                        defaultValue={risk.treatment || ""}
-                        placeholder="Describe mitigation measures..."
-                        onBlur={(e) => setRisk(threat.name, "treatment", e.target.value)}
-                        className="w-full p-2 border-2 c-border-gray rounded text-sm"
-                      />
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Estimated Cost</label>
-                          <input
-                            key={`${threat.name}-cost`}
-                            type="text"
-                            defaultValue={risk.estimatedCost || ""}
-                            placeholder="$..."
-                            onBlur={(e) => setRisk(threat.name, "estimatedCost", e.target.value)}
-                            className="w-full p-2 border-2 c-border-gray rounded text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Priority</label>
-                          <select
-                            value={risk.priority || ""}
-                            onChange={(e) => setRisk(threat.name, "priority", e.target.value)}
-                            className="w-full p-2 border-2 c-border-gray rounded text-sm"
-                          >
-                            <option value="">Select...</option>
-                            <option>Immediate (30d)</option>
-                            <option>Phase 1 (90d)</option>
-                            <option>Phase 2 (6-12mo)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Owner</label>
-                          <input
-                            key={`${threat.name}-owner`}
-                            type="text"
-                            defaultValue={risk.owner || ""}
-                            placeholder="Name"
-                            onBlur={(e) => setRisk(threat.name, "owner", e.target.value)}
-                            className="w-full p-2 border-2 c-border-gray rounded text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">Target Completion Date</label>
-                        <input
-                          type="date"
-                          value={risk.targetDate || ""}
-                          onChange={(e) => setRisk(threat.name, "targetDate", e.target.value)}
-                          className="w-full p-2 border-2 c-border-gray rounded text-sm"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -2031,7 +2055,7 @@ export default function App() {
                         <span className="font-bold c-text-navy">#{i + 1} </span>
                         <span className="font-semibold c-text-navy">{risk.threat}</span>
                         <p className="text-sm text-gray-600 mt-1">
-                          Residual Risk: {risk.residualRisk.toFixed(2)} = ({risk.maxCrit} × {risk.likelihood}) / Control Effectiveness
+                          Residual Risk: {risk.residualRisk.toFixed(2)} / 25 = ({risk.maxCrit} × {risk.likelihood}) / Control Effectiveness
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
