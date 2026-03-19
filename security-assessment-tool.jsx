@@ -11,15 +11,6 @@ const FACILITY_TYPES = [
   "Water / Wastewater",
 ];
 
-const CAPACITY_UNITS = {
-  "Power Generation": ["MW", "kW", "MVA", "kVA"],
-  "Transmission & Distribution (Substations)": ["MW", "kV", "MVA", "kVA"],
-  "Oil & Gas (Upstream / Midstream / Downstream)": ["BPD", "BPH", "kBPD", "MMSCFD", "MCF/day", "MMBTU/day"],
-  "Pipelines & Pumping Stations": ["BPD", "MMSCFD", "GPM", "PSI", "MCF/day"],
-  "LNG & Gasification": ["MMSCFD", "MMBTU/day", "MT/day", "LNG MTPA"],
-  "Renewables": ["MW", "kW", "MWh", "GWh"],
-  "Water / Wastewater": ["MGD", "GPM", "ML/day", "MLD"],
-};
 
 const ASSETS_BY_SUBVERTICAL = {
   "Power Generation": [
@@ -157,21 +148,21 @@ const THREAT_CATEGORIES = [
 ];
 
 const THREAT_CONTROL_MAP = {
-  "Material theft": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 12 },
-  "Equipment theft": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 10 },
-  "Opportunistic vandalism": { controls: ["fencing", "signage", "lighting", "cctv", "intrusion", "monitoring"], duration: 5 },
-  "Arson / Intentional Fire": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "enclosures"], duration: 3 },
-  "Protest-related damage": { controls: ["fencing", "bollards", "gates", "cctv", "intrusion", "monitoring", "security"], duration: 20 },
-  "Curiosity and exploration": { controls: ["fencing", "signage", "gates", "cctv", "intrusion", "monitoring"], duration: 30 },
-  "Encampments": { controls: ["fencing", "signage", "cctv", "intrusion", "patrols", "monitoring"], duration: null },
+  "Material theft": { controls: ["fencing", "gates", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 20 },
+  "Equipment theft": { controls: ["fencing", "gates", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 15 },
+  "Opportunistic vandalism": { controls: ["fencing", "signage", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: 5 },
+  "Arson / Intentional Fire": { controls: ["fencing", "lighting", "cctv", "intrusion", "monitoring", "patrols", "enclosures"], duration: 3 },
+  "Protest-related damage": { controls: ["fencing", "bollards", "gates", "cctv", "intrusion", "monitoring", "security"], duration: 60 },
+  "Curiosity and exploration": { controls: ["fencing", "signage", "gates", "lighting", "cctv", "intrusion", "monitoring", "locks"], duration: null },
+  "Encampments": { controls: ["fencing", "signage", "gates", "lighting", "cctv", "intrusion", "patrols", "monitoring"], duration: null },
   "Unauthorized contractors": { controls: ["cardReaders", "visitorMgmt", "credentialAcct", "cctv", "intrusion", "monitoring"], duration: null },
-  "Surveillance and probing": { controls: ["fencing", "cctv", "intrusion", "monitoring"], duration: 15 },
-  "Drone-enabled reconnaissance": { controls: ["cctv", "monitoring", "drone"], duration: 10 },
+  "Surveillance and probing": { controls: ["fencing", "lighting", "signage", "cctv", "intrusion", "monitoring"], duration: null },
+  "Drone-enabled reconnaissance": { controls: ["cctv", "monitoring", "drone"], duration: null },
   "Insider threat": { controls: ["cardReaders", "visitorMgmt", "credentialAcct", "cctv", "intrusion", "monitoring", "locks"], duration: null },
   "Coordinated physical attack": { controls: ["fencing", "bollards", "gates", "lighting", "cctv", "intrusion", "monitoring", "security", "enclosures", "locks", "redundancy", "communications"], duration: 30 },
-  "Vehicle strikes": { controls: ["bollards", "fencing", "signage"], duration: 0 },
+  "Vehicle strikes": { controls: ["bollards", "fencing", "signage", "lighting", "gates"], duration: 0 },
   "Natural hazards": { controls: ["enclosures", "redundancy", "communications"], duration: null },
-  "Hazardous materials release": { controls: ["enclosures", "locks", "monitoring", "communications"], duration: null }
+  "Hazardous materials release": { controls: ["enclosures", "locks", "signage", "monitoring", "communications"], duration: null }
 };
 
 // Threat-to-Asset Mapping: Which assets can each threat realistically impact?
@@ -298,21 +289,21 @@ const THREAT_ASSET_MAP = {
 
 // ─── Entity / Location / Visibility Risk Context ─────────────────────────────
 const ENTITY_CATEGORIES = {
-  government:       { label:"Government Building",              increasedThreats:["Targeted attack","Coordinated physical attack","Protest-related damage","Drone-enabled reconnaissance"], decreasedThreats:[],                                                                                                                  note:"Government adjacency elevates bomb threat exposure, protest spillover, and targeted attack risk." },
-  courthouse:       { label:"Courthouse / Justice Facility",    increasedThreats:["Targeted attack","Protest-related damage"],                                                              decreasedThreats:[],                                                                                                                  note:"Courthouses attract demonstrations and threat actors targeting legal proceedings." },
+  government:       { label:"Government Building",              increasedThreats:["Insider threat","Coordinated physical attack","Protest-related damage","Drone-enabled reconnaissance"], decreasedThreats:[],                                                                                                                  note:"Government adjacency elevates bomb threat exposure, protest spillover, and targeted attack risk." },
+  courthouse:       { label:"Courthouse / Justice Facility",    increasedThreats:["Coordinated physical attack","Protest-related damage"],                                                    decreasedThreats:[],                                                                                                                  note:"Courthouses attract demonstrations and threat actors targeting legal proceedings." },
   police:           { label:"Police Station",                   increasedThreats:[],                                                                                                         decreasedThreats:["Material theft","Equipment theft","Opportunistic vandalism","Curiosity and exploration","Encampments","Coordinated physical attack"], note:"Proximity to law enforcement improves deterrence and reduces opportunistic crime likelihood." },
   fire_station:     { label:"Fire Station",                     increasedThreats:[],                                                                                                         decreasedThreats:["Arson / Intentional Fire","Hazardous materials release","Natural hazards"],                                        note:"Fire station proximity improves emergency response to fire, hazmat, and natural hazard events." },
   school:           { label:"School / University",              increasedThreats:["Curiosity and exploration","Opportunistic vandalism","Encampments"],                                      decreasedThreats:[],                                                                                                                  note:"Educational institutions increase after-hours trespass, vandalism, and foot traffic exposure." },
   hospital:         { label:"Hospital / Medical Center",        increasedThreats:["Vehicle strikes"],                                                                                        decreasedThreats:["Natural hazards","Hazardous materials release"],                                                                   note:"Hospitals generate high vehicle traffic. Emergency services proximity reduces hazmat and natural hazard impact." },
   bank:             { label:"Bank / Financial Institution",     increasedThreats:["Material theft","Coordinated physical attack"],                                                           decreasedThreats:[],                                                                                                                  note:"Banks attract theft activity and may be co-targeted in coordinated criminal operations." },
-  embassy:          { label:"Embassy / Consulate",              increasedThreats:["Targeted attack","Protest-related damage","Coordinated physical attack","Drone-enabled reconnaissance"],  decreasedThreats:[],                                                                                                                  note:"Embassies are high-profile targets attracting protests, surveillance, and potential attack spillover." },
+  embassy:          { label:"Embassy / Consulate",              increasedThreats:["Insider threat","Protest-related damage","Coordinated physical attack","Drone-enabled reconnaissance"],  decreasedThreats:[],                                                                                                                  note:"Embassies are high-profile targets attracting protests, surveillance, and potential attack spillover." },
   place_of_worship: { label:"Place of Worship",                 increasedThreats:["Protest-related damage","Curiosity and exploration","Vehicle strikes"],                                   decreasedThreats:[],                                                                                                                  note:"Religious sites attract large gatherings and occasional demonstrations, increasing crowd-driven risk." },
   military:         { label:"Military Installation",            increasedThreats:["Surveillance and probing","Drone-enabled reconnaissance","Coordinated physical attack"],                  decreasedThreats:["Material theft","Opportunistic vandalism"],                                                                        note:"Military installations attract adversarial surveillance and may elevate the profile of adjacent infrastructure." },
   industrial:       { label:"Industrial Facility",              increasedThreats:["Hazardous materials release","Arson / Intentional Fire","Natural hazards"],                               decreasedThreats:[],                                                                                                                  note:"Adjacent industrial operations create fire, explosion, and hazmat spillover risk." },
   hotel:            { label:"Hotel / Lodging",                  increasedThreats:["Surveillance and probing","Unauthorized contractors"],                                                    decreasedThreats:[],                                                                                                                  note:"Hotels bring transient populations that facilitate extended surveillance of adjacent facilities." },
-  aerodrome:        { label:"Airport / Airfield",               increasedThreats:["Drone-enabled reconnaissance","Coordinated physical attack","Targeted attack"],                           decreasedThreats:[],                                                                                                                  note:"Airports increase drone activity in the area and attract security threats affecting adjacent infrastructure." },
+  aerodrome:        { label:"Airport / Airfield",               increasedThreats:["Drone-enabled reconnaissance","Coordinated physical attack","Surveillance and probing"],                  decreasedThreats:[],                                                                                                                  note:"Airports increase drone activity in the area and attract security threats affecting adjacent infrastructure." },
   transport:        { label:"Transit Hub",                      increasedThreats:["Curiosity and exploration","Encampments","Vehicle strikes"],                                              decreasedThreats:[],                                                                                                                  note:"Transit hubs generate foot traffic contributing to trespass, encampment, and vehicle access incidents." },
-  critical_infra:   { label:"Adjacent Critical Infrastructure", increasedThreats:["Coordinated physical attack","Targeted attack"],                                                         decreasedThreats:[],                                                                                                                  note:"Proximity to other critical infrastructure increases cascading impact potential and coordinated attack risk." },
+  critical_infra:   { label:"Adjacent Critical Infrastructure", increasedThreats:["Coordinated physical attack","Surveillance and probing"],                                                  decreasedThreats:[],                                                                                                                  note:"Proximity to other critical infrastructure increases cascading impact potential and coordinated attack risk." },
 };
 
 const LOCATION_RISK_CONTEXT = {
@@ -322,9 +313,9 @@ const LOCATION_RISK_CONTEXT = {
 };
 
 const VISIBILITY_RISK_CONTEXT = {
-  "High":   { elevated:["Material theft","Equipment theft","Opportunistic vandalism","Curiosity and exploration","Protest-related damage","Surveillance and probing","Drone-enabled reconnaissance"], reduced:["Insider threat","Encampments"],                                      summary:"High road visibility increases opportunistic and targeting exposure. Natural surveillance from passers-by may deter insider activity." },
-  "Medium": { elevated:[],                                                                                                                                                                              reduced:[],                                                                    summary:"Moderate road visibility presents balanced exposure — identifiable but not prominently observable." },
-  "Low":    { elevated:["Insider threat","Encampments","Unauthorized contractors"],                                                                                                                    reduced:["Opportunistic vandalism","Protest-related damage","Curiosity and exploration"], summary:"Low road visibility reduces opportunistic threats but limits natural surveillance, making insider and contractor irregularities harder to detect." },
+  "High":   { elevated:["Protest-related damage","Surveillance and probing","Drone-enabled reconnaissance","Curiosity and exploration"], reduced:["Material theft","Equipment theft","Encampments","Insider threat"],                                  summary:"High road visibility increases protest and surveillance exposure, but natural surveillance from passers-by deters theft, encampments, and insider activity." },
+  "Medium": { elevated:[],                                                                                                              reduced:[],                                                                                                                    summary:"Moderate road visibility presents balanced exposure — identifiable but not prominently observable." },
+  "Low":    { elevated:["Material theft","Equipment theft","Insider threat","Encampments","Unauthorized contractors"],                  reduced:["Protest-related damage","Curiosity and exploration","Surveillance and probing"], summary:"Low road visibility reduces protest and casual trespass exposure, but limited natural surveillance makes theft, insider activity, and encampments harder to detect." },
 };
 
 const ADJACENCY_KEYWORDS = [
@@ -360,14 +351,13 @@ const INITIAL_STATE = {
   facility: {
     date: new Date().toISOString().split("T")[0],
     assessor: "",
+    assessorEmail: "",
     clientName: "",
     facilityId: "",
     type: "",
     address: "",
     coordinates: "",
     gpsLoading: false,
-    capacityValue: "",
-    capacityUnit: "",
     locationAttributes: "",
     adjacencyNotes: "",
     visibility: "",
@@ -429,6 +419,18 @@ function getRiskLevel(score) {
   return                   { level: "LOW",    tc: "text-green-600",  bg: "bg-green-100",  bc: "border-green-500"  };
 }
 
+// ─── Shared utility: map raw risk score (0-25) to intuitive display score (0-100) ──
+// Ensures each risk level maps to a range users expect:
+//   LOW (0-3.99)     → 0-29    HIGH (7-9.99)    → 60-79
+//   MODERATE (4-6.99) → 30-59   EXTREME (10-25)  → 80-100
+function getRiskDisplayScore(raw) {
+  if (raw <= 0) return 0;
+  if (raw < 4)  return Math.floor((raw / 4) * 30);
+  if (raw < 7)  return 30 + Math.floor(((raw - 4) / 3) * 30);
+  if (raw < 10) return 60 + Math.floor(((raw - 7) / 3) * 20);
+  return Math.min(100, 80 + Math.floor(((raw - 10) / 15) * 21));
+}
+
 // ─── Shared utility: get all controls flat ────────────────────────────────────
 function getAllControlsFlat(controls) {
   const result = [];
@@ -452,6 +454,8 @@ const CONTROL_LABELS = {
 function getControlLabel(key) { return CONTROL_LABELS[key] || key; }
 
 // ─── Shared utility: control effectiveness with DBT logic ─────────────────────
+// LE Response (security) acts as a MODIFIER, not the baseline.
+// Baseline comes from physical, access, and detection controls only.
 function calculateControlEffectiveness(threatName, selectedControlKeys, controls, responseTime) {
   const allControls = getAllControlsFlat(controls);
   const selectedControls = selectedControlKeys
@@ -461,26 +465,52 @@ function calculateControlEffectiveness(threatName, selectedControlKeys, controls
 
   if (selectedControls.length === 0) return 1;
 
-  let baseEff = Math.max(...selectedControls.map(c => c.score));
-
+  // Separate response/modifier controls from physical/detection controls
+  const modifierKeys = ["security", "monitoring", "communications"];
+  const physicalControls = selectedControls.filter(c => !modifierKeys.includes(c.key));
+  const responseScore = selectedControls.find(c => c.key === "security")?.score || 0;
   const socScore = selectedControls.find(c => c.key === "monitoring")?.score || 0;
   const commsScore = selectedControls.find(c => c.key === "communications")?.score || 0;
-  const responseScore = selectedControls.find(c => c.key === "security")?.score || 0;
   const rt = parseInt(responseTime) || 999;
 
-  // SOC penalty
-  if (socScore > 0 && socScore <= 2) baseEff = Math.min(baseEff, 2.5);
-  // Comms penalty
-  if (commsScore > 0 && commsScore < baseEff - 0.5) baseEff = baseEff * 0.85;
-  // Time-based response penalty
+  // Baseline effectiveness comes from physical/detection controls
+  // Uses weighted average: highest control counts more, but others contribute
+  let baseEff;
+  if (physicalControls.length === 0) {
+    // Only modifier controls exist — use their average but cap it lower
+    baseEff = selectedControls.reduce((s, c) => s + c.score, 0) / selectedControls.length;
+    baseEff = Math.min(baseEff, 2.5);
+  } else if (physicalControls.length === 1) {
+    baseEff = physicalControls[0].score;
+  } else {
+    // Weighted: best control counts 50%, average of the rest counts 50%
+    const sorted = physicalControls.map(c => c.score).sort((a, b) => b - a);
+    const best = sorted[0];
+    const restAvg = sorted.slice(1).reduce((s, v) => s + v, 0) / (sorted.length - 1);
+    baseEff = (best * 0.5) + (restAvg * 0.5);
+  }
+
+  // SOC modifier: weak monitoring reduces detection effectiveness (multiplier, not hard cap)
+  if (socScore > 0 && socScore <= 2) baseEff = baseEff * 0.85;
+
+  // SOC bonus: strong monitoring boosts effectiveness slightly
+  if (socScore >= 4) baseEff = Math.min(5, baseEff * 1.1);
+
+  // Comms penalty: weak communications limits coordination
+  if (commsScore > 0 && commsScore < baseEff - 0.5) baseEff = baseEff * 0.9;
+
+  // LE Response modifier: only applies when physical controls are present
+  // LE response alone cannot provide meaningful control effectiveness
   const attackDuration = THREAT_CONTROL_MAP[threatName]?.duration;
-  if (attackDuration !== null && attackDuration !== undefined && responseScore > 0) {
-    if (rt > attackDuration * 2) {
-      const withoutResponse = selectedControls.filter(c => c.key !== "security" && c.score > 0);
-      if (withoutResponse.length > 0) baseEff = Math.max(...withoutResponse.map(c => c.score));
-    } else if (rt > attackDuration) {
-      baseEff = baseEff * 0.85;
+  if (responseScore > 0 && physicalControls.length > 0 && attackDuration !== null && attackDuration !== undefined) {
+    if (rt <= attackDuration) {
+      // Response arrives before attack completes — meaningful bonus
+      baseEff = Math.min(5, baseEff + (responseScore * 0.15));
+    } else if (rt <= attackDuration * 2) {
+      // Response arrives late but within 2x — minimal bonus
+      baseEff = Math.min(5, baseEff + (responseScore * 0.05));
     }
+    // If response time > 2x attack duration, LE response adds nothing
   }
 
   return Math.max(1, Math.min(5, baseEff));
@@ -495,11 +525,46 @@ function avgScore(controls) {
 export default function App() {
   const [step, setStep] = useState(0);
   const [d, setD] = useState(() => {
-    // Always start fresh — clear any previous session data
-    try { localStorage.removeItem("psr-assessment-data"); } catch {}
+    try {
+      const saved = localStorage.getItem("psr-assessment-data");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Validate it has expected structure
+        if (parsed && parsed.facility && parsed.controls) {
+          // Migrate old single-string photo format to new array format
+          if (parsed.criticality && parsed.criticality.assetPhotos) {
+            for (const key of Object.keys(parsed.criticality.assetPhotos)) {
+              if (typeof parsed.criticality.assetPhotos[key] === "string") {
+                parsed.criticality.assetPhotos[key] = [{ name: parsed.criticality.assetPhotos[key], data: "", timestamp: 0 }];
+              }
+            }
+          }
+          if (parsed.controlPhotos) {
+            for (const key of Object.keys(parsed.controlPhotos)) {
+              if (typeof parsed.controlPhotos[key] === "string") {
+                parsed.controlPhotos[key] = [{ name: parsed.controlPhotos[key], data: "", timestamp: 0 }];
+              }
+            }
+          }
+          return parsed;
+        }
+      }
+    } catch {}
     return INITIAL_STATE;
   });
-  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [showResumePrompt, setShowResumePrompt] = useState(() => {
+    try {
+      const saved = localStorage.getItem("psr-assessment-data");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Show resume prompt if there's meaningful saved data
+        if (parsed && parsed.facility && (parsed.facility.facilityId || parsed.facility.clientName || parsed.facility.type)) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  });
   const clearSavedData = () => { try { localStorage.removeItem("psr-assessment-data"); } catch {} setD(INITIAL_STATE); setShowResumePrompt(false); };
   const [open, setOpen] = useState({});
   const toggle = (k) => setOpen((p) => ({ ...p, [k]: !p[k] }));
@@ -524,29 +589,82 @@ export default function App() {
       },
     }));
 
-  const handleAssetPhotoUpload = (asset, file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setD((p) => ({
+  const handleAssetPhotoUpload = (asset, files) => {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    let processed = 0;
+    const results = [];
+    fileArray.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        results.push({ name: file.name, data: e.target.result, timestamp: Date.now() });
+        processed++;
+        if (processed === fileArray.length && results.length > 0) {
+          setD((p) => {
+            const existing = (p.criticality.assetPhotos || {})[asset] || [];
+            return {
+              ...p,
+              criticality: {
+                ...p.criticality,
+                assetPhotos: { ...(p.criticality.assetPhotos || {}), [asset]: [...existing, ...results] },
+              },
+            };
+          });
+        }
+      };
+      reader.onerror = () => { processed++; };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeAssetPhoto = (asset, index) => {
+    setD((p) => {
+      const photos = [...((p.criticality.assetPhotos || {})[asset] || [])];
+      photos.splice(index, 1);
+      return {
         ...p,
         criticality: {
           ...p.criticality,
-          assetPhotos: { ...(p.criticality.assetPhotos || {}), [asset]: file.name },
+          assetPhotos: { ...(p.criticality.assetPhotos || {}), [asset]: photos },
         },
-      }));
-    };
-    if (file) reader.readAsDataURL(file);
+      };
+    });
   };
 
-  const handleControlPhotoUpload = (controlKey, file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setD((p) => ({
+  const handleControlPhotoUpload = (controlKey, files) => {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    let processed = 0;
+    const results = [];
+    fileArray.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        results.push({ name: file.name, data: e.target.result, timestamp: Date.now() });
+        processed++;
+        if (processed === fileArray.length && results.length > 0) {
+          setD((p) => {
+            const existing = (p.controlPhotos || {})[controlKey] || [];
+            return {
+              ...p,
+              controlPhotos: { ...(p.controlPhotos || {}), [controlKey]: [...existing, ...results] },
+            };
+          });
+        }
+      };
+      reader.onerror = () => { processed++; };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeControlPhoto = (controlKey, index) => {
+    setD((p) => {
+      const photos = [...((p.controlPhotos || {})[controlKey] || [])];
+      photos.splice(index, 1);
+      return {
         ...p,
-        controlPhotos: { ...(p.controlPhotos || {}), [controlKey]: file.name },
-      }));
-    };
-    if (file) reader.readAsDataURL(file);
+        controlPhotos: { ...(p.controlPhotos || {}), [controlKey]: photos },
+      };
+    });
   };
 
   const setCtrl = (cat, ctrl, field, val) =>
@@ -687,10 +805,51 @@ export default function App() {
     setD(p => ({ ...p, risks: [...p.risks, ...newRisks] }));
   }, [d.threats, d.controls, d.criticality, d.facility.type]);
 
+  // ── Re-sync selectedControls when control scores change ────────────────────
+  // Ensures that controls scored AFTER risk entries were created get auto-checked
+  useEffect(() => {
+    if (d.risks.length === 0) return;
+    const allCtrl = getAllControlsFlat(d.controls);
+    setD(p => {
+      let updated = false;
+      const updatedRisks = p.risks.map(risk => {
+        const mapping = THREAT_CONTROL_MAP[risk.threat];
+        if (!mapping) return risk;
+        const autoControls = mapping.controls || [];
+        // Find controls that should be selected: mapped to this threat AND scored > 0
+        const shouldBeSelected = autoControls.filter(ctrlKey => {
+          const ctrl = allCtrl.find(c => c.key === ctrlKey);
+          return ctrl && ctrl.score > 0;
+        });
+        // Preserve any user-added controls that aren't in the auto-map
+        const currentSelected = risk.selectedControls || [];
+        const userAdded = currentSelected.filter(k => !autoControls.includes(k));
+        const newSelected = [...new Set([...shouldBeSelected, ...userAdded])];
+        // Remove any controls whose score dropped back to 0
+        const filtered = newSelected.filter(k => {
+          const ctrl = allCtrl.find(c => c.key === k);
+          return ctrl && ctrl.score > 0;
+        });
+        if (JSON.stringify(filtered.sort()) !== JSON.stringify([...currentSelected].sort())) {
+          updated = true;
+          return { ...risk, selectedControls: filtered };
+        }
+        return risk;
+      });
+      return updated ? { ...p, risks: updatedRisks } : p;
+    });
+  }, [d.controls]);
+
   // ── localStorage persistence (debounced) ────────────────────────────────────
+  const [saveWarning, setSaveWarning] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => {
-      try { localStorage.setItem("psr-assessment-data", JSON.stringify(d)); } catch {}
+      try {
+        localStorage.setItem("psr-assessment-data", JSON.stringify(d));
+        if (saveWarning) setSaveWarning("");
+      } catch (e) {
+        setSaveWarning("Auto-save failed — storage limit reached. Your photos may not persist if you close this page. Consider exporting your report now.");
+      }
     }, 1000);
     return () => clearTimeout(timer);
   }, [d]);
@@ -703,6 +862,12 @@ export default function App() {
       () => { alert("Unable to get location. Check permissions."); setFac("gpsLoading", false); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  // ── HTML escape utility for safe report generation ─────────────────────────
+  const esc = (str) => {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   };
 
   const exportReport = () => {
@@ -737,7 +902,7 @@ export default function App() {
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Security Risk Assessment Report - ${d.facility.facilityId || 'Facility'}</title>
+  <title>Security Risk Assessment Report - ${esc(d.facility.facilityId) || 'Facility'}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
     h1 { color: #0E2C49; border-bottom: 3px solid #C2090E; padding-bottom: 10px; }
@@ -767,12 +932,13 @@ export default function App() {
   <div class="header">
     <h2>Facility Information</h2>
     <div class="info-grid">
-      <div class="info-item"><span class="label">Client:</span> ${d.facility.clientName || 'Not specified'}</div>
-      <div class="info-item"><span class="label">Facility ID:</span> ${d.facility.facilityId || 'Not specified'}</div>
+      <div class="info-item"><span class="label">Client:</span> ${esc(d.facility.clientName) || 'Not specified'}</div>
+      <div class="info-item"><span class="label">Facility ID:</span> ${esc(d.facility.facilityId) || 'Not specified'}</div>
       <div class="info-item"><span class="label">Subvertical:</span> ${d.facility.type || 'Not specified'}</div>
-      <div class="info-item"><span class="label">Assessment Date:</span> ${d.facility.date || 'Not specified'}</div>
-      <div class="info-item"><span class="label">Assessed By:</span> ${d.facility.assessor || 'Not specified'}</div>
-      <div class="info-item"><span class="label">LE Response Time:</span> ${d.facility.responseTime ? d.facility.responseTime + ' min' : 'Not specified'}</div>
+      <div class="info-item"><span class="label">Assessment Date:</span> ${esc(d.facility.date) || 'Not specified'}</div>
+      <div class="info-item"><span class="label">Assessed By:</span> ${esc(d.facility.assessor) || 'Not specified'}</div>
+      <div class="info-item"><span class="label">Assessor Email:</span> ${esc(d.facility.assessorEmail) || 'Not specified'}</div>
+      <div class="info-item"><span class="label">LE Response Time:</span> ${d.facility.responseTime ? esc(d.facility.responseTime) + ' min' : 'Not specified'}</div>
     </div>
     ${d.facility.locationAttributes || d.facility.adjacencyNotes ? `
     <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d1d5db;">
@@ -780,7 +946,7 @@ export default function App() {
       ${d.facility.locationAttributes ? `<p><span class="label">Location Classification:</span> ${d.facility.locationAttributes}</p>` : ''}
       ${d.facility.locationAttributes && LOCATION_RISK_CONTEXT[d.facility.locationAttributes] ? `<p class="note">${LOCATION_RISK_CONTEXT[d.facility.locationAttributes].leNote}</p>` : ''}
       ${d.facility.visibility ? `<p><span class="label">Road Visibility:</span> ${d.facility.visibility}</p>` : ''}
-      ${d.facility.adjacencyNotes ? `<p><span class="label">Assessor Adjacency Notes:</span> ${d.facility.adjacencyNotes}</p>` : ''}
+      ${d.facility.adjacencyNotes ? `<p><span class="label">Assessor Adjacency Notes:</span> ${esc(d.facility.adjacencyNotes)}</p>` : ''}
     </div>
     ` : ''}
   </div>
@@ -844,7 +1010,7 @@ export default function App() {
   ${d.facility.adjacencyNotes ? `
   <div class="recommendation">
     <h3>Assessor Adjacency Notes</h3>
-    <p>${d.facility.adjacencyNotes}</p>
+    <p>${esc(d.facility.adjacencyNotes)}</p>
   </div>` : ''}
   `;
   })()}
@@ -852,10 +1018,10 @@ export default function App() {
   <h2>Executive Summary</h2>
   <p>This assessment identified <strong>${sortedRisks.length} total risks</strong> across the facility. Organization risk tolerance is set to <strong>${riskToleranceValue}/5</strong>; <strong>${exceedsToleranceCount}</strong> risk${exceedsToleranceCount !== 1 ? 's' : ''} exceed${exceedsToleranceCount === 1 ? 's' : ''} this threshold.</p>
   <ul>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 10).length} EXTREME</strong> risks (≥10.0/25) - Immediate treatment required</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 7 && r.residualRisk < 10).length} HIGH</strong> risks (7.0-9.9/25) - Treatment plan required</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 4 && r.residualRisk < 7).length} MODERATE</strong> risks (4.0-6.9/25) - Monitor and consider treatment</li>
-    <li><strong>${sortedRisks.filter(r => r.residualRisk < 4).length} LOW</strong> risks (<4.0/25) - Accept or minimal controls</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 10).length} EXTREME</strong> risks (Score 80-100) — Immediate treatment required</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 7 && r.residualRisk < 10).length} HIGH</strong> risks (Score 60-79) — Treatment plan required</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk >= 4 && r.residualRisk < 7).length} MODERATE</strong> risks (Score 30-59) — Monitor and consider treatment</li>
+    <li><strong>${sortedRisks.filter(r => r.residualRisk < 4).length} LOW</strong> risks (Score 0-29) — Accept or minimal controls</li>
   </ul>
 
   ${highPri.length > 0 ? `
@@ -867,9 +1033,9 @@ export default function App() {
     <div class="risk-${r.riskLevel.toLowerCase()}">
       <h3>#${i+1} ${r.threat} - ${r.riskLevel}${r.exceedsTolerance ? ' <span style="background:#dc2626;color:white;padding:2px 8px;border-radius:12px;font-size:0.7em;">EXCEEDS TOLERANCE</span>' : ''}</h3>
       ${flagsHtml}
-      <p><strong>Residual Risk Score:</strong> ${r.residualRisk.toFixed(2)} / 25 = (${r.maxCrit} × ${r.likelihood}) / Control Effectiveness</p>
-      ${r.treatment ? `<p><strong>Treatment Plan:</strong> ${r.treatment}</p>` : ''}
-      ${r.estimatedCost ? `<p><strong>Estimated Cost:</strong> ${r.estimatedCost}</p>` : ''}
+      <p><strong>Risk Level:</strong> ${r.riskLevel} — Risk Index: ${getRiskDisplayScore(r.residualRisk)}/100 <span style="color:#6b7280;font-size:0.85em;">(raw: ${r.residualRisk.toFixed(2)}/25)</span></p>
+      ${r.treatment ? `<p><strong>Treatment Plan:</strong> ${esc(r.treatment)}</p>` : ''}
+      ${r.estimatedCost ? `<p><strong>Estimated Cost:</strong> ${esc(r.estimatedCost)}</p>` : ''}
     </div>
   `}).join('')}
   ` : ''}
@@ -893,7 +1059,7 @@ export default function App() {
           <td style="text-transform: capitalize;">${cat}</td>
           <td>${avg}/5</td>
           <td>${weakControls.length > 0 
-            ? weakControls.map(([k, c]) => getControlLabel(k) + ` (${c.score})${c.notes ? ': ' + c.notes : ''}`).join('<br>')
+            ? weakControls.map(([k, c]) => getControlLabel(k) + ` (${c.score})${c.notes ? ': ' + esc(c.notes) : ''}`).join('<br>')
             : 'None'
           }</td>
         </tr>
@@ -912,7 +1078,7 @@ export default function App() {
           ${gaps.map(([k, c]) => `
             <li>
               <strong>${getControlLabel(k)}:</strong> Score ${c.score}/5
-              ${c.notes ? `<div class="note">Note: ${c.notes}</div>` : ''}
+              ${c.notes ? `<div class="note">Note: ${esc(c.notes)}</div>` : ''}
             </li>
           `).join('')}
         </ul>
@@ -920,64 +1086,74 @@ export default function App() {
     `;
   }).join('')}
 
-  ${highPri.length > 0 ? `
-  <h2>Recommended Control Improvements</h2>
-  <p>Implement these controls to reduce residual risk for HIGH and EXTREME threats:</p>
-  ${highPri.map(risk => {
+  <h2>Mitigation Recommendations</h2>
+  <p>The following recommendations are prioritized by residual risk level and are intended to reduce the likelihood and/or impact of the threats identified in this assessment.</p>
+  ${sortedRisks.map((risk, i) => {
     const applicableControls = THREAT_CONTROL_MAP[risk.threat]?.controls || [];
-    const allControls = getAllControlsFlat(d.controls);
+    const allCtrl = getAllControlsFlat(d.controls);
     const weakControls = applicableControls
-      .map(ctrlKey => allControls.find(c => c.key === ctrlKey))
+      .map(ctrlKey => allCtrl.find(c => c.key === ctrlKey))
       .filter(c => c && c.score > 0 && c.score < 3)
       .sort((a, b) => a.score - b.score);
-    
-    if (weakControls.length === 0) return '';
-    
-    const recommendations = {
-      fencing: "Upgrade to 8' chain-link with 3-strand barbed wire, repair gaps, anti-climb measures",
-      gates: "Install high-security locks, automated access control, vehicle barriers",
-      lighting: "Add perimeter LED lighting with backup power, eliminate dark zones",
+    const strongGaps = applicableControls
+      .map(ctrlKey => allCtrl.find(c => c.key === ctrlKey))
+      .filter(c => c && c.score === 0);
+    const recMap = {
+      fencing: "Upgrade to 8' chain-link with 3-strand barbed wire, repair gaps, add anti-climb measures",
+      gates: "Install high-security locks, automated access control, vehicle barriers at entry points",
+      lighting: "Add perimeter LED lighting with backup power, eliminate dark zones around critical assets",
       bollards: "Install crash-rated bollards (K4/K8) at vehicle approach points",
-      signage: "Post clear no-trespassing signs with contact info at all entry points",
-      locks: "Replace with high-security cylinders, implement key control program",
-      cardReaders: "Deploy card readers at all access points, integrate with monitoring",
-      visitorMgmt: "Implement sign-in system, require escorts, issue temporary badges",
-      credentialAcct: "Deploy badge tracking system, prompt revocation procedures",
-      cctv: "Install megapixel cameras with 30-day retention, active monitoring",
-      intrusion: "Deploy perimeter sensors (fence-mounted, volumetric), integrate with SOC",
-      patrols: "Schedule regular patrols with documented rounds, mobile response capability",
-      monitoring: "Establish 24/7 SOC with video verification and dispatch protocols",
-      security: "Improve coordination with law enforcement, establish MOU, reduce response time",
+      signage: "Post clear no-trespassing signs with contact info at all entry points and along perimeter",
+      locks: "Replace with high-security cylinders, implement a formal key control program",
+      cardReaders: "Deploy card readers at all access points, integrate with centralized monitoring",
+      visitorMgmt: "Implement sign-in system, require escorts for non-credentialed personnel, issue temporary badges",
+      credentialAcct: "Deploy badge tracking system with prompt revocation procedures upon termination",
+      cctv: "Install megapixel cameras with 30-day retention and active monitoring by SOC",
+      intrusion: "Deploy perimeter sensors (fence-mounted, volumetric), integrate with SOC for real-time alerting",
+      patrols: "Schedule regular patrols with documented rounds and mobile response capability",
+      monitoring: "Establish 24/7 Security Operations Center with video verification and dispatch protocols",
+      security: "Improve coordination with law enforcement, establish MOU, target reduced response time",
       communications: "Install redundant communications (radio + cellular), test quarterly",
-      drone: "Deploy RF/radar drone detection system with alert protocols",
-      enclosures: "Add ballistic-rated enclosures for critical equipment",
-      redundancy: "Implement N+1 redundancy, geographic diversity for critical systems"
+      drone: "Deploy RF/radar drone detection system with alert and response protocols",
+      enclosures: "Add ballistic-rated or hardened enclosures for critical equipment",
+      redundancy: "Implement N+1 redundancy and geographic diversity for critical systems"
     };
-    
-    return `
-      <div class="recommendation">
-        <h3>To Mitigate: ${risk.threat}</h3>
-        <ul>
-          ${weakControls.slice(0, 3).map(c => `
-            <li><strong>${getControlLabel(c.key)}</strong> (currently ${c.score}/5): ${recommendations[c.key] || 'Improve implementation and maintenance'}</li>
-          `).join('')}
-        </ul>
-      </div>
-    `;
+    const recs = weakControls.slice(0, 4).map(c =>
+      '<li><strong>' + getControlLabel(c.key) + '</strong> (currently ' + c.score + '/5): ' + (recMap[c.key] || 'Improve implementation and maintenance') + '</li>'
+    ).join('');
+    const unscored = strongGaps.slice(0, 2).map(c =>
+      '<li><strong>' + getControlLabel(c.key) + '</strong> (not scored): Consider implementing this control for this threat</li>'
+    ).join('');
+    if (!recs && !unscored) return '';
+    return '<div class="recommendation"><h3>#' + (i+1) + ' ' + risk.threat + ' <span style="font-size:0.8em;color:#6b7280;">(' + risk.riskLevel + ' — Risk Index: ' + getRiskDisplayScore(risk.residualRisk) + '/100)</span></h3><ul>' + recs + unscored + '</ul></div>';
   }).join('')}
-  ` : ''}
 
-  <h2>Next Steps</h2>
-  <ol>
-    <li>Brief executive leadership on ${highPri.length} high-priority risks</li>
-    <li>Engage security contractor for detailed design of recommended improvements</li>
-    <li>Coordinate with law enforcement on response protocols and MOU</li>
-    <li>Schedule follow-up assessment in 12 months or after any security incident</li>
-  </ol>
+  ${(() => {
+    // Collect all photos: asset photos and control photos
+    const assetPhotos = Object.entries(d.criticality.assetPhotos || {}).filter(([k, v]) => Array.isArray(v) && v.length > 0);
+    const controlPhotos = Object.entries(d.controlPhotos || {}).filter(([k, v]) => Array.isArray(v) && v.length > 0);
+    if (assetPhotos.length === 0 && controlPhotos.length === 0) return '';
+    return '<h2>Photo Evidence</h2>' +
+      '<p>The following photographs were captured during the assessment to document current conditions.</p>' +
+      (assetPhotos.length > 0 ? '<h3>Asset Photos</h3>' + assetPhotos.map(([asset, photos]) =>
+        '<div style="margin:15px 0;"><h4 style="color:#054163;">' + asset + ' (' + photos.length + ' photo' + (photos.length !== 1 ? 's' : '') + ')</h4>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">' +
+        photos.map(p => p.data ? '<div style="text-align:center;"><img src="' + p.data + '" style="max-width:250px;max-height:200px;border:1px solid #d1d5db;border-radius:4px;" /><p style="font-size:0.75em;color:#6b7280;margin-top:4px;">' + p.name + '</p></div>' : '').join('') +
+        '</div></div>'
+      ).join('') : '') +
+      (controlPhotos.length > 0 ? '<h3>Control Photos</h3>' + controlPhotos.map(([key, photos]) => {
+        const parts = key.split('-');
+        const controlKey = parts[parts.length - 1];
+        return '<div style="margin:15px 0;"><h4 style="color:#054163;">' + (getControlLabel(controlKey) || key) + ' (' + photos.length + ' photo' + (photos.length !== 1 ? 's' : '') + ')</h4>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">' +
+          photos.map(p => p.data ? '<div style="text-align:center;"><img src="' + p.data + '" style="max-width:250px;max-height:200px;border:1px solid #d1d5db;border-radius:4px;" /><p style="font-size:0.75em;color:#6b7280;margin-top:4px;">' + p.name + '</p></div>' : '').join('') +
+          '</div></div>';
+      }).join('') : '');
+  })()}
 
   <hr style="margin: 40px 0;">
   <p style="text-align: center; color: #6b7280; font-size: 0.9em;">
-    Assessment completed on ${d.facility.date || new Date().toISOString().split('T')[0]} by ${d.facility.assessor || 'Not specified'}
+    Assessment completed on ${esc(d.facility.date) || new Date().toISOString().split('T')[0]} by ${esc(d.facility.assessor) || 'Not specified'}${d.facility.assessorEmail ? ' (' + esc(d.facility.assessorEmail) + ')' : ''}
   </p>
 </body>
 </html>
@@ -1000,7 +1176,6 @@ export default function App() {
 
   // ── STEP 0: Facility Profile ──────────────────────────────────────────────
   const FacilityProfile = React.memo(() => {
-    const units = CAPACITY_UNITS[d.facility.type] || [];
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold c-text-navy c-bg-light px-4 py-2 rounded-lg inline-block border-l-4 c-border-red">Facility Profile</h2>
@@ -1015,34 +1190,16 @@ export default function App() {
           </div>
         </div>
         <div>
+          <label className="block text-sm font-medium c-text-navy mb-1">Assessor Email</label>
+          <input type="email" defaultValue={d.facility.assessorEmail} placeholder="email@example.com" onBlur={(e) => setFac("assessorEmail", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded" />
+        </div>
+        <div>
           <label className="block text-sm font-medium c-text-navy mb-1">Subvertical</label>
-          <select value={d.facility.type} onChange={(e) => { setFac("type", e.target.value); setFac("capacityUnit", ""); }} className="w-full p-2 border-2 c-border-gray rounded">
+          <select value={d.facility.type} onChange={(e) => { setFac("type", e.target.value); }} className="w-full p-2 border-2 c-border-gray rounded">
             <option value="">Select subvertical...</option>
             {FACILITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        {d.facility.type && (CAPACITY_UNITS[d.facility.type] || []).length > 0 && (
-          <div>
-            <div className="grid grid-cols-2 gap-4 mb-2">
-              <div>
-                <label className="block text-sm font-medium c-text-navy mb-1">Capacity Value</label>
-                <input type="text" defaultValue={d.facility.capacityValue} placeholder="e.g., 500" onBlur={(e) => setFac("capacityValue", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium c-text-navy mb-1">Capacity Unit</label>
-                <select value={d.facility.capacityUnit} onChange={(e) => setFac("capacityUnit", e.target.value)} className="w-full p-2 border-2 c-border-gray rounded">
-                  <option value="">Select unit...</option>
-                  {(CAPACITY_UNITS[d.facility.type] || []).map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500">
-              {(d.facility.type === "Power Generation" || d.facility.type === "Transmission & Distribution (Substations)")
-                ? "Higher capacity values generally indicate higher potential asset criticality."
-                : "Optional — capacity information provides context but does not directly affect criticality scoring for this sub-vertical."}
-            </p>
-          </div>
-        )}
         <div>
           <label className="block text-sm font-medium c-text-navy mb-1">Risk Tolerance</label>
           <div className="flex items-center space-x-3">
@@ -1126,7 +1283,7 @@ export default function App() {
         <div>
           <label className="block text-sm font-medium c-text-navy mb-1">GPS Coordinates</label>
           <div className="flex gap-2">
-            <input type="text" defaultValue={d.facility.coordinates} placeholder="Lat, Long (e.g., 32.7767, -96.7970)" onBlur={(e) => setFac("coordinates", e.target.value)} className="flex-1 p-2 border-2 c-border-gray rounded" />
+            <input type="text" value={d.facility.coordinates || ""} onChange={(e) => setFac("coordinates", e.target.value)} placeholder="Lat, Long (e.g., 32.7767, -96.7970)" className="flex-1 p-2 border-2 c-border-gray rounded" />
             <button onClick={captureGPS} disabled={d.facility.gpsLoading}
               className="flex items-center gap-2 px-4 py-2 c-bg-teal  c-disabled-gray text-white rounded font-medium text-sm whitespace-nowrap">
               {d.facility.gpsLoading ? "Locating..." : "Use GPS"}
@@ -1270,27 +1427,47 @@ export default function App() {
                   }>
                     <h3 className={"font-semibold " + (isAbsent ? "text-gray-400" : "c-text-navy")}>
                       {asset}
-                      {isPresent && (d.criticality.assetPhotos || {})[asset] && (
-                        <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">1 photo</span>
+                      {isPresent && ((d.criticality.assetPhotos || {})[asset] || []).length > 0 && (
+                        <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{((d.criticality.assetPhotos || {})[asset]).length} photo{((d.criticality.assetPhotos || {})[asset]).length !== 1 ? "s" : ""}</span>
                       )}
                     </h3>
                     <div className="flex items-center gap-2">
                       {isPresent && (
                         <>
+                          {/* Gallery picker — works on all platforms */}
                           <input
                             type="file"
                             id={`asset-photo-${asset}`}
                             accept="image/*"
-                            onChange={(e) => e.target.files && handleAssetPhotoUpload(asset, e.target.files[0])}
+                            multiple
+                            onChange={(e) => { handleAssetPhotoUpload(asset, e.target.files); e.target.value = ""; }}
+                            className="hidden"
+                          />
+                          {/* Camera capture — ensures Android can take photos directly */}
+                          <input
+                            type="file"
+                            id={`asset-camera-${asset}`}
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => { handleAssetPhotoUpload(asset, e.target.files); e.target.value = ""; }}
                             className="hidden"
                           />
                           <button
-                            onClick={() => document.getElementById(`asset-photo-${asset}`).click()}
-                            className="p-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-500"
-                            title="Attach photo"
+                            onClick={() => document.getElementById(`asset-camera-${asset}`).click()}
+                            className="flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-500 text-xs font-medium"
+                            title="Take photo with camera"
                             tabIndex={0}
                           >
-                            <Camera className="w-4 h-4" />
+                            <Camera className="w-3.5 h-3.5" />
+                            Take Photo
+                          </button>
+                          <button
+                            onClick={() => document.getElementById(`asset-photo-${asset}`).click()}
+                            className="flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-500 text-xs font-medium"
+                            title="Choose from gallery"
+                            tabIndex={0}
+                          >
+                            <span>+ Gallery</span>
                           </button>
                         </>
                       )}
@@ -1367,6 +1544,25 @@ export default function App() {
                         {score === 4 && "Significant service interruption, safety exposure, or major operational disruption; difficult recovery; high visibility."}
                         {score === 5 && "Sustained outage or major safety/environmental consequence likely; cascading impacts beyond the site; strategic/regional significance."}
                       </div>
+                      {/* Photo gallery for this asset */}
+                      {((d.criticality.assetPhotos || {})[asset] || []).length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-xs font-medium c-text-navy mb-2">Attached Photos</p>
+                          <div className="flex flex-wrap gap-2">
+                            {((d.criticality.assetPhotos || {})[asset] || []).map((photo, idx) => (
+                              <div key={idx} className="relative group">
+                                <img src={photo.data} alt={photo.name} className="w-16 h-16 object-cover rounded border border-gray-200" />
+                                <button
+                                  onClick={() => removeAssetPhoto(asset, idx)}
+                                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                  title="Remove photo"
+                                >×</button>
+                                <p className="text-center text-gray-400 mt-0.5" style={{fontSize: "8px"}}>{photo.name.length > 10 ? photo.name.slice(0, 10) + "…" : photo.name}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1419,40 +1615,40 @@ export default function App() {
     const cats = [
       { id: "perimeter", name: "Perimeter Security", Icon: Shield,
         ctrls: [
-          { k: "fencing",  l: "Fencing",            d: "Height, condition, anti-climb features" },
-          { k: "gates",    l: "Gates",               d: "Locked, access-controlled, maintained" },
-          { k: "signage",  l: "Signage",             d: "No Trespassing, contact info posted" },
-          { k: "lighting", l: "Lighting",            d: "Perimeter coverage, operational" },
-          { k: "bollards", l: "Bollards / Barriers", d: "Vehicle protection at critical points" },
+          { k: "fencing",  l: "Fencing",            d: "Type, height, condition, anti-climb features, coverage of full perimeter" },
+          { k: "gates",    l: "Gates",               d: "Number of entry points, locking mechanism, automated vs. manual, condition" },
+          { k: "signage",  l: "Signage",             d: "No Trespassing / warning signs posted at entry points and along perimeter with contact info" },
+          { k: "lighting", l: "Lighting",            d: "Perimeter and interior coverage, dark spots, backup power, operational status" },
+          { k: "bollards", l: "Bollards / Barriers", d: "Crash-rated (K-rating) vehicle barriers at approach points, condition" },
         ],
       },
       { id: "access", name: "Access Control", Icon: Lock,
         ctrls: [
-          { k: "locks",          l: "Physical Locks",               d: "High-security locks, key control, equipment cabinets, valve boxes, transformer enclosures" },
-          { k: "cardReaders",    l: "Electronic Access Control",    d: "Card readers, biometrics, access logs reviewed" },
-          { k: "visitorMgmt",    l: "Visitor Management",           d: "Sign-in, escorts, badges" },
-          { k: "credentialAcct", l: "Identity & Access Management", d: "Credential issuance, tracking, prompt revocation" },
+          { k: "locks",          l: "Physical Locks",               d: "Lock type (padlock, cylinder, high-security), key control program, coverage of cabinets, valve boxes, enclosures" },
+          { k: "cardReaders",    l: "Electronic Access Control",    d: "Card readers or biometrics at entry points, access logs reviewed, integration with monitoring" },
+          { k: "visitorMgmt",    l: "Visitor Management",           d: "Sign-in/sign-out process, escort requirements for non-credentialed personnel, temporary badges" },
+          { k: "credentialAcct", l: "Identity & Access Management", d: "Credential issuance and tracking, prompt revocation on termination, audit of active credentials" },
         ],
       },
       { id: "detection", name: "Surveillance & Detection", Icon: Eye,
         ctrls: [
-          { k: "cctv",       l: "Video Surveillance",              d: "Camera coverage, retention, actively monitored" },
-          { k: "intrusion",  l: "Intrusion Detection System",        d: "Perimeter sensors, volumetric detection active" },
-          { k: "patrols",    l: "Security Officer Presence",         d: "On-site personnel, scheduled patrols, documented" },
-          { k: "drone",      l: "Drone Detection",                   d: "RF detection, radar, acoustic sensors for UAS identification" },
+          { k: "cctv",       l: "Video Surveillance",              d: "Camera coverage (% of perimeter/critical areas), retention period, actively monitored vs. forensic only" },
+          { k: "intrusion",  l: "Intrusion Detection System",        d: "Perimeter sensors (fence-mounted, buried, volumetric), alarm integration with SOC, false alarm rate" },
+          { k: "patrols",    l: "Security Officer Presence",         d: "On-site or roving officers, patrol frequency and schedule, documented rounds, response capability" },
+          { k: "drone",      l: "Drone Detection",                   d: "RF detection, radar, or acoustic sensors for UAS identification and tracking, alert protocols" },
         ],
       },
       { id: "hardening", name: "Asset Hardening", Icon: Building,
         ctrls: [
-          { k: "enclosures", l: "Hardened Enclosures",  d: "Ballistic protection, reinforced structures, shielding" },
-          { k: "redundancy", l: "Redundancy",           d: "Backup systems, geographic diversity" },
+          { k: "enclosures", l: "Hardened Enclosures",  d: "Ballistic or blast-rated protection, reinforced structures, weather shielding for critical equipment" },
+          { k: "redundancy", l: "Redundancy",           d: "N+1 backup systems, geographic diversity, failover capability for critical operations" },
         ],
       },
       { id: "response", name: "Response Capability", Icon: AlertTriangle,
         ctrls: [
-          { k: "monitoring",     l: "Security Operations Center (SOC)",    d: "24/7 monitoring, alarm receipt/assessment, video verification, dispatch coordination" },
-          { k: "security",       l: "Security & Law Enforcement Response", d: "On-site security, law enforcement coordination, MOU, response time" },
-          { k: "communications", l: "Communication Systems",                d: "Redundant, tested regularly" },
+          { k: "monitoring",     l: "Security Operations Center (SOC)",    d: "Monitoring hours (24/7 vs. business hours), alarm receipt and assessment, video verification, dispatch coordination" },
+          { k: "security",       l: "Security & Law Enforcement Response", d: "On-site security presence, LE coordination and MOU, verified response time, dispatch protocols" },
+          { k: "communications", l: "Communication Systems",                d: "Redundant comms (radio + cellular), regular testing, backup power for comms equipment" },
         ],
       },
     ];
@@ -1579,29 +1775,63 @@ export default function App() {
                           </div>
                           <div className="mt-3">
                             <label className="block text-xs font-medium c-text-navy mb-2">
-                              Optional: Attach Photo
-                              {(d.controlPhotos || {})[`${id}-${k}`] && (
-                                <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">1 photo</span>
+                              Optional: Attach Photos
+                              {((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && (
+                                <span className="ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{((d.controlPhotos || {})[`${id}-${k}`]).length} photo{((d.controlPhotos || {})[`${id}-${k}`]).length !== 1 ? "s" : ""}</span>
                               )}
                             </label>
                             <div className="flex items-center gap-2">
+                              {/* Gallery picker */}
                               <input
                                 type="file"
                                 id={`control-photo-${id}-${k}`}
                                 accept="image/*"
-                                onChange={(e) => e.target.files && handleControlPhotoUpload(`${id}-${k}`, e.target.files[0])}
+                                multiple
+                                onChange={(e) => { handleControlPhotoUpload(`${id}-${k}`, e.target.files); e.target.value = ""; }}
+                                className="hidden"
+                              />
+                              {/* Camera capture for Android */}
+                              <input
+                                type="file"
+                                id={`control-camera-${id}-${k}`}
+                                accept="image/*"
+                                capture="environment"
+                                onChange={(e) => { handleControlPhotoUpload(`${id}-${k}`, e.target.files); e.target.value = ""; }}
                                 className="hidden"
                               />
                               <button
-                                onClick={() => document.getElementById(`control-photo-${id}-${k}`).click()}
+                                onClick={() => document.getElementById(`control-camera-${id}-${k}`).click()}
                                 className="flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium"
-                                title="Attach photo of control"
+                                title="Take photo with camera"
                                 tabIndex={0}
                               >
                                 <Camera className="w-4 h-4" />
-                                Choose Photo
+                                Take Photo
+                              </button>
+                              <button
+                                onClick={() => document.getElementById(`control-photo-${id}-${k}`).click()}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium"
+                                title="Choose from gallery"
+                                tabIndex={0}
+                              >
+                                + Gallery
                               </button>
                             </div>
+                            {/* Photo thumbnails */}
+                            {((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {((d.controlPhotos || {})[`${id}-${k}`] || []).map((photo, idx) => (
+                                  <div key={idx} className="relative group">
+                                    <img src={photo.data} alt={photo.name} className="w-14 h-14 object-cover rounded border border-gray-200" />
+                                    <button
+                                      onClick={() => removeControlPhoto(`${id}-${k}`, idx)}
+                                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                      title="Remove photo"
+                                    >×</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1850,7 +2080,7 @@ export default function App() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <div className={"px-3 py-1 rounded-full font-semibold text-sm " + riskLevel.bg + " " + riskLevel.tc}>{riskLevel.level}</div>
-                      <div className="text-xs text-gray-600">{residualRisk.toFixed(2)} / 25</div>
+                      <div className="text-xs text-gray-600">Risk Index: {getRiskDisplayScore(residualRisk)}/100</div>
                     </div>
                   </div>
 
@@ -1925,9 +2155,9 @@ export default function App() {
                       </div>
                     </div>
                     <div className="text-center pt-2 border-t">
-                      <span className="text-sm text-gray-600">Residual Risk Score: </span>
-                      <span className={"text-lg font-bold " + riskLevel.tc}>{residualRisk.toFixed(2)} / 25</span>
-                      <span className="text-xs text-gray-500 ml-2">({maxCrit} × {threat.likelihood}) / {controlEff.toFixed(2)}</span>
+                      <span className="text-sm text-gray-600">Residual Risk: </span>
+                      <span className={"text-lg font-bold " + riskLevel.tc}>{riskLevel.level} — {getRiskDisplayScore(residualRisk)}/100</span>
+                      <span className="text-xs text-gray-500 ml-2">(raw: {residualRisk.toFixed(2)}/25)</span>
                     </div>
                   </div>
 
@@ -2000,7 +2230,6 @@ export default function App() {
                   ["Client", d.facility.clientName],
                   ["Facility ID", d.facility.facilityId],
                   ["Subvertical", d.facility.type],
-                  d.facility.capacityValue ? ["Capacity", d.facility.capacityValue + " " + d.facility.capacityUnit] : null,
                   ["Date", d.facility.date],
                   ["Assessed By", d.facility.assessor],
                   d.facility.locationAttributes ? ["Location", d.facility.locationAttributes] : null,
@@ -2055,7 +2284,7 @@ export default function App() {
                         <span className="font-bold c-text-navy">#{i + 1} </span>
                         <span className="font-semibold c-text-navy">{risk.threat}</span>
                         <p className="text-sm text-gray-600 mt-1">
-                          Residual Risk: {risk.residualRisk.toFixed(2)} / 25 = ({risk.maxCrit} × {risk.likelihood}) / Control Effectiveness
+                          Risk Index: {getRiskDisplayScore(risk.residualRisk)}/100 <span className="text-xs text-gray-400">(raw: {risk.residualRisk.toFixed(2)}/25)</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2327,8 +2556,15 @@ export default function App() {
     <div className="min-h-screen c-bg-light p-4">
       <style>{'\n      .c-text-navy   { color: #0E2C49; }\n      .c-text-teal   { color: #054163; }\n      .c-text-red    { color: #C2090E; }\n      .c-text-gray   { color: #8D98AC; }\n      .c-text-light  { color: #EEF2F4; }\n      .c-bg-navy     { background-color: #0E2C49; }\n      .c-bg-teal     { background-color: #054163; }\n      .c-bg-red      { background-color: #C2090E; }\n      .c-bg-gray     { background-color: #8D98AC; }\n      .c-bg-light    { background-color: #EEF2F4; }\n      .c-bg-extreme  { background-color: #d0d9e3; }\n      .c-border-navy    { border-color: #0E2C49; }\n      .c-border-teal    { border-color: #054163; }\n      .c-border-red     { border-color: #C2090E; }\n      .c-border-gray    { border-color: #8D98AC; }\n      .c-border-light   { border-color: #EEF2F4; }\n      .c-border-extreme { border-color: #d0d9e3; }\n      .c-gradient-header { background: linear-gradient(to right, #0E2C49, #054163, #0E2C49); }\n      .c-gradient-btn    { background: linear-gradient(to right, #054163, #0E2C49); }\n      .c-disabled-gray:disabled { background-color: #8D98AC; }\n'}</style>
 
+      {/* Storage warning */}
+      {saveWarning && (
+        <div className="max-w-4xl mx-auto mb-4">
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-sm text-red-800">{saveWarning}</div>
+        </div>
+      )}
+
       {/* Resume previous assessment prompt */}
-      {showResumePrompt && d.facility.facilityId && (
+      {showResumePrompt && (
         <div className="max-w-4xl mx-auto mb-4">
           <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 flex items-center justify-between">
             <div>
@@ -2377,10 +2613,12 @@ export default function App() {
           <div className="mb-4 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2 text-sm text-yellow-800 text-center">{stepWarning}</div>
         )}
         <div className="flex justify-between">
-          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}
-            className="px-6 py-3 c-bg-gray text-white rounded-lg font-semibold disabled:opacity-50 hover:c-bg-navy transition-colors">
-            Previous
-          </button>
+          {step > 0 ? (
+            <button onClick={() => setStep(step - 1)}
+              className="px-6 py-3 c-bg-gray text-white rounded-lg font-semibold hover:c-bg-navy transition-colors">
+              Previous
+            </button>
+          ) : <div />}
           <button onClick={() => canAdvance && setStep(Math.min(STEPS.length - 1, step + 1))} disabled={step === STEPS.length - 1 || !canAdvance}
             className="px-6 py-3 c-gradient-btn text-white font-bold rounded-lg font-semibold disabled:opacity-50 transition-colors">
             Next
