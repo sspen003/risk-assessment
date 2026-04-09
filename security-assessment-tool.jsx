@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { AlertTriangle, Shield, Lock, Eye, Building, CheckCircle, Download, ChevronDown, ChevronUp, Camera } from "lucide-react";
+import { AlertTriangle, Shield, Lock, Eye, Building, CheckCircle, Download, Mail, ChevronDown, ChevronUp, Camera } from "lucide-react";
 
 const FACILITY_TYPES = [
   "Power Generation",
@@ -366,6 +366,9 @@ const INITIAL_STATE = {
     entityLookupStatus: "idle",
   },
   criticality: { assetPresence: {}, assetScores: {}, assetPhotos: {} },
+  customAssets: [],
+  customThreats: [],
+  additionalControlNotes: {},
   controlPhotos: {},
   controls: {
     perimeter: {
@@ -696,6 +699,70 @@ export default function App() {
   const setRisk = (threat, f, v) =>
     setD((p) => ({ ...p, risks: p.risks.map((r) => (r.threat === threat ? { ...r, [f]: v } : r)) }));
 
+  // ── Custom asset management ───────────────────────────────────────────────
+  const addCustomAsset = (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setD((p) => {
+      if (p.customAssets.includes(trimmed)) return p;
+      return {
+        ...p,
+        customAssets: [...p.customAssets, trimmed],
+        criticality: {
+          ...p.criticality,
+          assetPresence: { ...p.criticality.assetPresence, [trimmed]: true },
+          assetScores: { ...p.criticality.assetScores, [trimmed]: 3 },
+        },
+      };
+    });
+  };
+
+  const removeCustomAsset = (name) => {
+    setD((p) => {
+      const newPresence = { ...p.criticality.assetPresence };
+      const newScores = { ...p.criticality.assetScores };
+      const newPhotos = { ...(p.criticality.assetPhotos || {}) };
+      delete newPresence[name];
+      delete newScores[name];
+      delete newPhotos[name];
+      return {
+        ...p,
+        customAssets: p.customAssets.filter(a => a !== name),
+        criticality: { ...p.criticality, assetPresence: newPresence, assetScores: newScores, assetPhotos: newPhotos },
+        risks: p.risks.map(r => ({
+          ...r,
+          affectedAssets: (r.affectedAssets || []).filter(a => a.asset !== name),
+        })),
+      };
+    });
+  };
+
+  // ── Custom threat management ──────────────────────────────────────────────
+  const addCustomThreat = (name, category) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setD((p) => {
+      if (p.threats.find(t => t.name === trimmed)) return p;
+      return {
+        ...p,
+        customThreats: [...(p.customThreats || []), { name: trimmed, category: category || "Custom" }],
+        threats: [...p.threats, { name: trimmed, evidence: [], likelihood: 3 }],
+      };
+    });
+  };
+
+  const removeCustomThreat = (name) => {
+    setD((p) => ({
+      ...p,
+      customThreats: (p.customThreats || []).filter(t => t.name !== name),
+      threats: p.threats.filter(t => t.name !== name),
+      risks: p.risks.filter(r => r.threat !== name),
+    }));
+  };
+
+  // ── Additional control notes per category ─────────────────────────────────
+  const setAdditionalControlNotes = (catId, notes) =>
+    setD((p) => ({ ...p, additionalControlNotes: { ...(p.additionalControlNotes || {}), [catId]: notes } }));
 
   // ── Nearby entity lookup (OpenStreetMap Nominatim + Overpass) ──────────────
   const lookupNearbyEntities = async () => {
@@ -793,13 +860,23 @@ export default function App() {
       .map(([assetName]) => ({ name: assetName, criticality: d.criticality.assetScores[assetName] || 3 }));
     const newRisks = missing.map(threat => {
       const mapping = THREAT_CONTROL_MAP[threat.name];
+      const isCustom = !mapping;
       const autoControls = mapping?.controls || [];
-      const availableControls = autoControls.filter(ctrlKey => {
-        const ctrl = allCtrl.find(c => c.key === ctrlKey);
-        return ctrl && ctrl.score > 0;
-      });
-      const relevantAssetNames = THREAT_ASSET_MAP[d.facility.type]?.[threat.name] || [];
-      const relevantAssets = presentAssets.filter(a => relevantAssetNames.includes(a.name));
+      let availableControls;
+      let relevantAssets;
+      if (isCustom) {
+        // Custom threats: default to ALL scored controls and ALL present assets
+        // so the user can deselect what doesn't apply, rather than starting from zero
+        availableControls = allCtrl.filter(c => c.score > 0).map(c => c.key);
+        relevantAssets = presentAssets;
+      } else {
+        availableControls = autoControls.filter(ctrlKey => {
+          const ctrl = allCtrl.find(c => c.key === ctrlKey);
+          return ctrl && ctrl.score > 0;
+        });
+        const relevantAssetNames = THREAT_ASSET_MAP[d.facility.type]?.[threat.name] || [];
+        relevantAssets = presentAssets.filter(a => relevantAssetNames.includes(a.name));
+      }
       return { threat: threat.name, likelihood: threat.likelihood || 3, affectedAssets: relevantAssets, selectedControls: availableControls, treatment: "", estimatedCost: "", priority: "", owner: "", targetDate: "" };
     });
     setD(p => ({ ...p, risks: [...p.risks, ...newRisks] }));
@@ -814,22 +891,34 @@ export default function App() {
       let updated = false;
       const updatedRisks = p.risks.map(risk => {
         const mapping = THREAT_CONTROL_MAP[risk.threat];
-        if (!mapping) return risk;
-        const autoControls = mapping.controls || [];
-        // Find controls that should be selected: mapped to this threat AND scored > 0
-        const shouldBeSelected = autoControls.filter(ctrlKey => {
-          const ctrl = allCtrl.find(c => c.key === ctrlKey);
-          return ctrl && ctrl.score > 0;
-        });
-        // Preserve any user-added controls that aren't in the auto-map
+        const isCustomThreat = !mapping;
         const currentSelected = risk.selectedControls || [];
-        const userAdded = currentSelected.filter(k => !autoControls.includes(k));
-        const newSelected = [...new Set([...shouldBeSelected, ...userAdded])];
-        // Remove any controls whose score dropped back to 0
-        const filtered = newSelected.filter(k => {
-          const ctrl = allCtrl.find(c => c.key === k);
-          return ctrl && ctrl.score > 0;
-        });
+
+        let filtered;
+        if (isCustomThreat) {
+          // Custom threats: auto-include ALL scored controls (user can deselect)
+          const allScoredKeys = allCtrl.filter(c => c.score > 0).map(c => c.key);
+          // Merge: keep any user-selected + add newly scored controls
+          filtered = [...new Set([...currentSelected, ...allScoredKeys])].filter(k => {
+            const ctrl = allCtrl.find(c => c.key === k);
+            return ctrl && ctrl.score > 0;
+          });
+        } else {
+          const autoControls = mapping.controls || [];
+          // Find controls that should be selected: mapped to this threat AND scored > 0
+          const shouldBeSelected = autoControls.filter(ctrlKey => {
+            const ctrl = allCtrl.find(c => c.key === ctrlKey);
+            return ctrl && ctrl.score > 0;
+          });
+          // Preserve any user-added controls that aren't in the auto-map
+          const userAdded = currentSelected.filter(k => !autoControls.includes(k));
+          const newSelected = [...new Set([...shouldBeSelected, ...userAdded])];
+          // Remove any controls whose score dropped back to 0
+          filtered = newSelected.filter(k => {
+            const ctrl = allCtrl.find(c => c.key === k);
+            return ctrl && ctrl.score > 0;
+          });
+        }
         if (JSON.stringify(filtered.sort()) !== JSON.stringify([...currentSelected].sort())) {
           updated = true;
           return { ...risk, selectedControls: filtered };
@@ -868,6 +957,482 @@ export default function App() {
   const esc = (str) => {
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  };
+
+  // ─── Build structured assessment payload ──────────────────────────────────
+  const buildAssessmentPayload = () => {
+    const toleranceThresholds = { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2 };
+    const riskToleranceValue = d.facility.riskTolerance || 3;
+    const toleranceThreshold = toleranceThresholds[riskToleranceValue];
+
+    // Calculate risks with scores
+    const risksWithScores = d.risks.map(risk => {
+      const threat = d.threats.find(t => t.name === risk.threat);
+      if (!threat || !risk.affectedAssets || risk.affectedAssets.length === 0) return null;
+
+      const maxCrit = Math.max(...risk.affectedAssets.map(a => a.criticality));
+      const controlEff = risk.selectedControls.length > 0
+        ? calculateControlEffectiveness(threat.name, risk.selectedControls, d.controls, d.facility.responseTime)
+        : 1;
+      const inherentRisk = maxCrit * threat.likelihood;
+      const residualRisk = inherentRisk > 0 ? inherentRisk / controlEff : 0;
+      const rl = getRiskLevel(residualRisk);
+      const exceedsTolerance = residualRisk >= toleranceThreshold;
+
+      return { ...risk, residualRisk, maxCrit, likelihood: threat.likelihood, controlEff, riskLevel: rl.level, exceedsTolerance };
+    }).filter(Boolean);
+
+    const sortedRisks = [...risksWithScores].sort((a, b) => b.residualRisk - a.residualRisk);
+
+    // ── ASSETS ────────────────────────────────────────────────────────────────
+    const customAssetNames = d.customAssets || [];
+    const assets = Object.entries(d.criticality.assetPresence)
+      .filter(([_, present]) => present)
+      .map(assetName => {
+        const name = assetName[0];
+        const critScore = d.criticality.assetScores[name] || 1;
+        const critTier = getCritTier(critScore);
+        return {
+          name,
+          present: true,
+          isCustom: customAssetNames.includes(name),
+          criticalityScore: critScore,
+          criticalityTier: critTier.tier
+        };
+      });
+
+    // ── THREATS ───────────────────────────────────────────────────────────────
+    const customThreatDefs = d.customThreats || [];
+    const threats = d.threats.map(t => {
+      const catObj = THREAT_CATEGORIES.find(c => c.threats.some(th => th.name === t.name));
+      const threatDef = catObj ? catObj.threats.find(th => th.name === t.name) : null;
+      const customDef = customThreatDefs.find(ct => ct.name === t.name);
+      const tcm = THREAT_CONTROL_MAP[t.name] || {};
+      return {
+        name: t.name,
+        category: customDef ? customDef.category : (catObj ? catObj.category : "Unknown"),
+        isCustom: !!customDef,
+        likelihood: t.likelihood,
+        description: threatDef?.description || (customDef ? "Custom threat — no predefined description. Assessor-identified based on site-specific conditions." : ""),
+        estimatedAttackDuration: tcm.duration !== null && tcm.duration !== undefined ? `${tcm.duration} min` : "Sustained / indeterminate",
+        applicableControls: (tcm.controls || []).map(k => getControlLabel(k))
+      };
+    });
+
+    // ── SECURITY CONTROLS ────────────────────────────────────────────────────
+    const allCtrl = getAllControlsFlat(d.controls);
+    const controlSummary = {};
+    ["perimeter", "access", "detection", "hardening", "response"].forEach(cat => {
+      const ctrls = Object.entries(d.controls[cat] || {});
+      const scored = ctrls.filter(([_, c]) => c.score > 0);
+      const avg = scored.length > 0
+        ? (scored.reduce((s, [_, c]) => s + c.score, 0) / scored.length).toFixed(1)
+        : "N/A";
+      const addlNotes = (d.additionalControlNotes || {})[cat] || null;
+      controlSummary[cat] = {
+        averageScore: avg,
+        controls: ctrls.map(([key, c]) => ({
+          key,
+          label: getControlLabel(key),
+          score: c.score,
+          rating: getCtrlRating(c.score).label,
+          notes: c.notes || null,
+          isGap: c.score > 0 && c.score < 3,
+          notAssessed: c.score === 0
+        })),
+        additionalControlsNoted: addlNotes
+      };
+    });
+
+    // ── CONTROL GAPS (explicit list) ─────────────────────────────────────────
+    const controlGaps = allCtrl
+      .filter(c => c.score > 0 && c.score < 3)
+      .map(c => ({
+        key: c.key,
+        label: getControlLabel(c.key),
+        category: c.category,
+        score: c.score,
+        rating: getCtrlRating(c.score).label,
+        notes: allCtrl.find(ac => ac.key === c.key)?.notes || null
+      }));
+
+    // ── RISKS (scored, sorted, with justification & recommendations) ─────────
+    const recMap = {
+      fencing: "Upgrade to 8' chain-link with 3-strand barbed wire, repair gaps, add anti-climb measures",
+      gates: "Install high-security locks, automated access control, vehicle barriers at entry points",
+      lighting: "Add perimeter LED lighting with backup power, eliminate dark zones around critical assets",
+      bollards: "Install crash-rated bollards (K4/K8) at vehicle approach points",
+      signage: "Post clear no-trespassing signs with contact info at all entry points and along perimeter",
+      locks: "Replace with high-security cylinders, implement a formal key control program",
+      cardReaders: "Deploy card readers at all access points, integrate with centralized monitoring",
+      visitorMgmt: "Implement sign-in system, require escorts for non-credentialed personnel, issue temporary badges",
+      credentialAcct: "Deploy badge tracking system with prompt revocation procedures upon termination",
+      cctv: "Install megapixel cameras with 30-day retention and active monitoring by SOC",
+      intrusion: "Deploy perimeter sensors (fence-mounted, volumetric), integrate with SOC for real-time alerting",
+      patrols: "Schedule regular patrols with documented rounds and mobile response capability",
+      monitoring: "Establish 24/7 Security Operations Center with video verification and dispatch protocols",
+      security: "Improve coordination with law enforcement, establish MOU, target reduced response time",
+      communications: "Install redundant communications (radio + cellular), test quarterly",
+      drone: "Deploy RF/radar drone detection system with alert and response protocols",
+      enclosures: "Add ballistic-rated or hardened enclosures for critical equipment",
+      redundancy: "Implement N+1 redundancy and geographic diversity for critical systems"
+    };
+
+    const risks = sortedRisks.map((risk, i) => {
+      const applicableControls = THREAT_CONTROL_MAP[risk.threat]?.controls || [];
+      const weakControls = applicableControls
+        .map(ctrlKey => allCtrl.find(c => c.key === ctrlKey))
+        .filter(c => c && c.score > 0 && c.score < 3)
+        .sort((a, b) => a.score - b.score);
+      const unscoredControls = applicableControls
+        .map(ctrlKey => allCtrl.find(c => c.key === ctrlKey))
+        .filter(c => c && c.score === 0);
+
+      const recommendations = [
+        ...weakControls.slice(0, 4).map(c => ({
+          control: getControlLabel(c.key),
+          currentScore: c.score,
+          action: recMap[c.key] || "Improve implementation and maintenance"
+        })),
+        ...unscoredControls.slice(0, 2).map(c => ({
+          control: getControlLabel(c.key),
+          currentScore: "Not assessed",
+          action: "Consider implementing this control for this threat"
+        }))
+      ];
+
+      // Build justification narrative
+      const justification = buildRiskJustification(risk, weakControls, d.facility);
+
+      return {
+        rank: i + 1,
+        threat: risk.threat,
+        riskLevel: risk.riskLevel,
+        riskIndex: getRiskDisplayScore(risk.residualRisk),
+        rawScore: parseFloat(risk.residualRisk.toFixed(2)),
+        exceedsTolerance: risk.exceedsTolerance,
+        affectedAssets: risk.affectedAssets.map(a => ({ name: a.asset, criticality: a.criticality })),
+        maxAssetCriticality: risk.maxCrit,
+        threatLikelihood: risk.likelihood,
+        controlEffectiveness: parseFloat(risk.controlEff.toFixed(2)),
+        inherentRiskRaw: parseFloat((risk.maxCrit * risk.likelihood).toFixed(2)),
+        treatmentPlan: risk.treatment || null,
+        estimatedCost: risk.estimatedCost || null,
+        justification,
+        recommendations
+      };
+    });
+
+    // ── EXECUTIVE STATISTICS ─────────────────────────────────────────────────
+    const stats = {
+      totalRisks: sortedRisks.length,
+      riskTolerance: riskToleranceValue,
+      exceedsToleranceCount: sortedRisks.filter(r => r.exceedsTolerance).length,
+      extremeCount: sortedRisks.filter(r => r.residualRisk >= 10).length,
+      highCount: sortedRisks.filter(r => r.residualRisk >= 7 && r.residualRisk < 10).length,
+      moderateCount: sortedRisks.filter(r => r.residualRisk >= 4 && r.residualRisk < 7).length,
+      lowCount: sortedRisks.filter(r => r.residualRisk < 4).length,
+      totalControlGaps: controlGaps.length,
+      criticalGaps: controlGaps.filter(g => g.score === 1).length
+    };
+
+    // ── SITE CONTEXT MODIFIERS ────────────────────────────────────────────────
+    const siteContext = {};
+    const locAttr = d.facility.locationAttributes;
+    const visibility = d.facility.visibility;
+    if (locAttr && LOCATION_RISK_CONTEXT[locAttr]) {
+      const ctx = LOCATION_RISK_CONTEXT[locAttr];
+      siteContext.locationClassification = {
+        type: locAttr,
+        summary: ctx.summary,
+        leNote: ctx.leNote,
+        elevatedThreats: ctx.elevated,
+        reducedThreats: ctx.reduced
+      };
+    }
+    if (visibility && VISIBILITY_RISK_CONTEXT[visibility]) {
+      const ctx = VISIBILITY_RISK_CONTEXT[visibility];
+      siteContext.roadVisibility = {
+        level: visibility,
+        summary: ctx.summary,
+        elevatedThreats: ctx.elevated,
+        reducedThreats: ctx.reduced
+      };
+    }
+    // Adjacent entities
+    const confirmedEntities = (d.facility.nearbyEntities || []).filter(e => e.confirmed);
+    const adjKeywordEntities = (() => {
+      const notes = (d.facility.adjacencyNotes || "").toLowerCase();
+      const found = []; const seenTypes = new Set();
+      ADJACENCY_KEYWORDS.forEach(({ keywords, type }) => {
+        if (seenTypes.has(type)) return;
+        if (keywords.some(kw => notes.includes(kw))) {
+          const cat = ENTITY_CATEGORIES[type];
+          if (cat) { found.push({ type, label: cat.label, fromNotes: true }); seenTypes.add(type); }
+        }
+      });
+      return found;
+    })();
+    const allEntities = [...confirmedEntities, ...adjKeywordEntities.filter(ae => !confirmedEntities.some(ce => ce.type === ae.type))];
+    if (allEntities.length > 0) {
+      siteContext.adjacentEntities = allEntities.map(e => {
+        const cat = ENTITY_CATEGORIES[e.type] || {};
+        return {
+          type: e.type,
+          name: e.name || e.label || cat.label,
+          source: e.fromNotes ? "Assessor notes" : (e.distance ? `Detected (${Math.round(e.distance * 3.28084)}ft)` : "Detected"),
+          increasedThreats: cat.increasedThreats || [],
+          decreasedThreats: cat.decreasedThreats || [],
+          note: cat.note || ""
+        };
+      });
+    }
+
+    // ── CONTROL SCORING CRITERIA (reference for AI report generation) ────────
+    const controlScoringCriteria = {
+      "0 - N/A": "Control not applicable to this asset type.",
+      "1 - Ineffective": "Control is absent, routinely bypassed, nonfunctional, or purely on paper. No meaningful delay or detection capability; incidents discovered hours or days later. Coverage is spotty with major gaps; response is unreliable or undefined.",
+      "2 - Weak": "Control exists but is inconsistent (limited coverage/hours), outdated, or poorly maintained. May provide 1-3 minutes of delay or require extended time for SOC assessment. Procedures are informal; alarms/events often not acted on or response is slow/unpredictable.",
+      "3 - Adequate": "Control is generally present and working; known gaps exist but are manageable. Provides 3-10 minutes of delay and/or detection within 2-5 minutes; SOC can verify and dispatch during business hours. Basic governance and maintenance are in place.",
+      "4 - Strong": "Control is well-designed and consistently applied with few meaningful gaps. Provides 10-20 minutes of delay and/or real-time detection with SOC verification and dispatch within minutes. Good maintenance discipline; clear ownership; effective monitoring/dispatch.",
+      "5 - Robust": "Control is layered, validated, and resilient (redundancy, uptime monitoring, testing). Provides 20+ minutes of delay and/or immediate detection (under 1 minute) with 24/7 SOC response and verified rapid dispatch. Continuous improvement through metrics/reviews."
+    };
+
+    // ── PHOTO EVIDENCE METADATA ──────────────────────────────────────────────
+    const photoEvidence = {};
+    const assetPhotos = Object.entries(d.criticality.assetPhotos || {}).filter(([_, v]) => Array.isArray(v) && v.length > 0);
+    const ctrlPhotos = Object.entries(d.controlPhotos || {}).filter(([_, v]) => Array.isArray(v) && v.length > 0);
+    if (assetPhotos.length > 0) {
+      photoEvidence.assetPhotos = assetPhotos.map(([asset, photos]) => ({
+        asset,
+        photoCount: photos.length,
+        photoNames: photos.map(p => p.name).filter(Boolean)
+      }));
+    }
+    if (ctrlPhotos.length > 0) {
+      photoEvidence.controlPhotos = ctrlPhotos.map(([key, photos]) => {
+        const parts = key.split("-");
+        const controlKey = parts[parts.length - 1];
+        return {
+          control: getControlLabel(controlKey) || key,
+          photoCount: photos.length,
+          photoNames: photos.map(p => p.name).filter(Boolean)
+        };
+      });
+    }
+
+    // ── FULL PAYLOAD ─────────────────────────────────────────────────────────
+    return {
+      meta: {
+        reportType: "Physical Security Risk Assessment",
+        version: "1.2",
+        generatedAt: new Date().toISOString(),
+        facilityId: d.facility.facilityId || "Not specified",
+        client: d.facility.clientName || "Not specified"
+      },
+      facility: {
+        client: d.facility.clientName,
+        facilityId: d.facility.facilityId,
+        subvertical: d.facility.type,
+        assessmentDate: d.facility.date,
+        assessor: d.facility.assessor,
+        assessorEmail: d.facility.assessorEmail,
+        address: d.facility.address,
+        coordinates: d.facility.coordinates,
+        locationClassification: d.facility.locationAttributes || null,
+        roadVisibility: d.facility.visibility || null,
+        leResponseTime: d.facility.responseTime ? `${d.facility.responseTime} min` : null,
+        riskTolerance: riskToleranceValue,
+        adjacencyNotes: d.facility.adjacencyNotes || null
+      },
+      siteContext,
+      executiveSummary: stats,
+      assets,
+      threats,
+      securityControls: controlSummary,
+      controlScoringCriteria,
+      controlGaps,
+      risks,
+      photoEvidence: (assetPhotos.length > 0 || ctrlPhotos.length > 0) ? photoEvidence : undefined,
+    };
+  };
+
+  // ─── Build risk justification narrative ──────────────────────────────────
+  function buildRiskJustification(risk, weakControls, facility) {
+    const parts = [];
+    // Why this risk level
+    if (risk.riskLevel === "EXTREME" || risk.riskLevel === "HIGH") {
+      parts.push(`Rated ${risk.riskLevel} (Index ${getRiskDisplayScore(risk.residualRisk)}/100) due to high asset criticality (${risk.maxCrit}/5) combined with threat likelihood (${risk.likelihood}/5).`);
+    } else {
+      parts.push(`Rated ${risk.riskLevel} (Index ${getRiskDisplayScore(risk.residualRisk)}/100) based on asset criticality (${risk.maxCrit}/5) and threat likelihood (${risk.likelihood}/5).`);
+    }
+    // Control posture
+    if (weakControls.length > 0) {
+      const weakNames = weakControls.slice(0, 3).map(c => getControlLabel(c.key) + ` (${c.score}/5)`).join(", ");
+      parts.push(`Weak control posture identified: ${weakNames}.`);
+    } else {
+      parts.push(`Applicable controls are rated adequate or above.`);
+    }
+    // Tolerance
+    if (risk.exceedsTolerance) {
+      parts.push(`This risk EXCEEDS the organization's stated risk tolerance (${facility.riskTolerance || 3}/5) and requires treatment.`);
+    }
+    // LE response context
+    if (facility.responseTime) {
+      const dur = THREAT_CONTROL_MAP[risk.threat]?.duration;
+      if (dur !== null && dur !== undefined && parseInt(facility.responseTime) > dur) {
+        parts.push(`LE response time (${facility.responseTime} min) exceeds estimated attack duration (${dur} min), limiting response effectiveness.`);
+      }
+    }
+    return parts.join(" ");
+  }
+
+  // ─── Format payload as readable email body text ──────────────────────────
+  const formatPayloadForEmail = (payload) => {
+    const lines = [];
+    lines.push("══════════════════════════════════════");
+    lines.push("PHYSICAL SECURITY RISK ASSESSMENT REPORT");
+    lines.push("══════════════════════════════════════");
+    lines.push("");
+    lines.push(`Client: ${payload.facility.client || "N/A"}`);
+    lines.push(`Facility: ${payload.facility.facilityId || "N/A"}`);
+    lines.push(`Subvertical: ${payload.facility.subvertical || "N/A"}`);
+    lines.push(`Date: ${payload.facility.assessmentDate || "N/A"}`);
+    lines.push(`Assessor: ${payload.facility.assessor || "N/A"}`);
+    lines.push(`Location: ${payload.facility.locationClassification || "N/A"} | Visibility: ${payload.facility.roadVisibility || "N/A"}`);
+    lines.push(`LE Response: ${payload.facility.leResponseTime || "N/A"}`);
+    lines.push(`Risk Tolerance: ${payload.facility.riskTolerance}/5`);
+    lines.push("");
+
+    // Executive Summary
+    lines.push("── EXECUTIVE SUMMARY ──");
+    const s = payload.executiveSummary;
+    lines.push(`Total Risks: ${s.totalRisks} | Exceeds Tolerance: ${s.exceedsToleranceCount}`);
+    lines.push(`  EXTREME: ${s.extremeCount} | HIGH: ${s.highCount} | MODERATE: ${s.moderateCount} | LOW: ${s.lowCount}`);
+    lines.push(`  Control Gaps: ${s.totalControlGaps} (${s.criticalGaps} critical)`);
+    lines.push("");
+
+    // Site Context
+    if (payload.siteContext && Object.keys(payload.siteContext).length > 0) {
+      lines.push("── SITE CONTEXT MODIFIERS ──");
+      if (payload.siteContext.locationClassification) {
+        const loc = payload.siteContext.locationClassification;
+        lines.push(`  Location: ${loc.type}`);
+        lines.push(`  ${loc.summary}`);
+        lines.push(`  ${loc.leNote}`);
+        if (loc.elevatedThreats.length) lines.push(`  Elevated: ${loc.elevatedThreats.join(", ")}`);
+        if (loc.reducedThreats.length) lines.push(`  Reduced: ${loc.reducedThreats.join(", ")}`);
+      }
+      if (payload.siteContext.roadVisibility) {
+        const vis = payload.siteContext.roadVisibility;
+        lines.push(`  Visibility: ${vis.level} — ${vis.summary}`);
+        if (vis.elevatedThreats.length) lines.push(`  Elevated: ${vis.elevatedThreats.join(", ")}`);
+        if (vis.reducedThreats.length) lines.push(`  Reduced: ${vis.reducedThreats.join(", ")}`);
+      }
+      if (payload.siteContext.adjacentEntities) {
+        lines.push(`  Adjacent Entities (${payload.siteContext.adjacentEntities.length}):`);
+        payload.siteContext.adjacentEntities.forEach(e => {
+          lines.push(`    ${e.name} (${e.source}) — ${e.note}`);
+        });
+      }
+      lines.push("");
+    }
+
+    // Assets
+    lines.push("── ASSETS ──");
+    payload.assets.forEach(a => {
+      lines.push(`  [${a.criticalityScore}/5 ${a.criticalityTier}] ${a.name}${a.isCustom ? " (Custom)" : ""}`);
+    });
+    lines.push("");
+
+    // Threats
+    lines.push("── THREATS ──");
+    payload.threats.forEach(t => {
+      lines.push(`  [Likelihood ${t.likelihood}/5] ${t.name} (${t.category})${t.isCustom ? " [Custom]" : ""}`);
+      lines.push(`    ${t.description}`);
+      if (!t.isCustom) {
+        lines.push(`    Attack Duration: ${t.estimatedAttackDuration} | Applicable Controls: ${t.applicableControls.join(", ")}`);
+      }
+    });
+    lines.push("");
+
+    // Security Controls Summary (with additional notes)
+    lines.push("── SECURITY CONTROLS ──");
+    Object.entries(payload.securityControls).forEach(([cat, data]) => {
+      lines.push(`  ${cat.toUpperCase()} (Avg: ${data.averageScore}/5)`);
+      data.controls.forEach(c => {
+        if (c.score > 0) lines.push(`    ${c.label}: ${c.score}/5 (${c.rating})${c.notes ? " -- " + c.notes : ""}`);
+      });
+      if (data.additionalControlsNoted) {
+        lines.push(`    Additional controls noted: ${data.additionalControlsNoted}`);
+      }
+    });
+    lines.push("");
+
+    // Control Gaps
+    if (payload.controlGaps.length > 0) {
+      lines.push("── CONTROL GAPS ──");
+      payload.controlGaps.forEach(g => {
+        lines.push(`  [${g.score}/5 - ${g.rating}] ${g.label} (${g.category})${g.notes ? " -- " + g.notes : ""}`);
+      });
+      lines.push("");
+    }
+
+    // Risks with justification and recommendations
+    lines.push("── RISK ANALYSIS ──");
+    payload.risks.forEach(r => {
+      lines.push("");
+      lines.push(`#${r.rank} ${r.threat} — ${r.riskLevel} (Index ${r.riskIndex}/100)${r.exceedsTolerance ? " ** EXCEEDS TOLERANCE **" : ""}`);
+      lines.push(`  Assets: ${r.affectedAssets.map(a => a.name + " (" + a.criticality + "/5)").join(", ")}`);
+      lines.push(`  Inherent Risk: ${r.inherentRiskRaw} | Control Eff: ${r.controlEffectiveness} | Residual: ${r.rawScore}`);
+      lines.push(`  Justification: ${r.justification}`);
+      if (r.treatmentPlan) lines.push(`  Treatment: ${r.treatmentPlan}`);
+      if (r.estimatedCost) lines.push(`  Est. Cost: ${r.estimatedCost}`);
+      if (r.recommendations.length > 0) {
+        lines.push("  Recommendations:");
+        r.recommendations.forEach(rec => {
+          lines.push(`    - ${rec.control} (${rec.currentScore}/5): ${rec.action}`);
+        });
+      }
+    });
+    // Photo Evidence Metadata
+    if (payload.photoEvidence) {
+      lines.push("");
+      lines.push("── PHOTO EVIDENCE ──");
+      if (payload.photoEvidence.assetPhotos) {
+        payload.photoEvidence.assetPhotos.forEach(p => {
+          lines.push(`  Asset: ${p.asset} — ${p.photoCount} photo(s)`);
+        });
+      }
+      if (payload.photoEvidence.controlPhotos) {
+        payload.photoEvidence.controlPhotos.forEach(p => {
+          lines.push(`  Control: ${p.control} — ${p.photoCount} photo(s)`);
+        });
+      }
+    }
+
+    // Scoring Criteria Reference
+    lines.push("");
+    lines.push("── CONTROL SCORING CRITERIA REFERENCE ──");
+    Object.entries(payload.controlScoringCriteria).forEach(([level, desc]) => {
+      lines.push(`  ${level}: ${desc}`);
+    });
+
+    lines.push("");
+    lines.push("══════════════════════════════════════");
+    lines.push(`Generated: ${payload.meta.generatedAt}`);
+    lines.push("══════════════════════════════════════");
+
+    return lines.join("\n");
+  };
+
+  // ─── Email the assessment payload ────────────────────────────────────────
+  const emailAssessmentReport = () => {
+    const payload = buildAssessmentPayload();
+    const emailBody = formatPayloadForEmail(payload);
+    const subject = `Security Assessment Report - ${payload.facility.facilityId || "Facility"} - ${payload.facility.client || "Client"} - ${payload.facility.assessmentDate || ""}`;
+    const mailto = `mailto:scott.spencer@convergint.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+    window.open(mailto, "_blank");
   };
 
   const exportReport = () => {
@@ -1379,9 +1944,12 @@ export default function App() {
   // ── STEP 1: Asset Criticality ─────────────────────────────────────────────
   const AssetCriticality = () => {
     const sub = d.facility.type;
-    const assets = sub ? (ASSETS_BY_SUBVERTICAL[sub] || []) : [];
-    const presentAssets = assets.filter((a) => d.criticality.assetPresence[a] === true);
-    const confirmedCount = assets.filter((a) => d.criticality.assetPresence[a] !== undefined).length;
+    const baseAssets = sub ? (ASSETS_BY_SUBVERTICAL[sub] || []) : [];
+    const customAssetList = d.customAssets || [];
+    const assets = [...baseAssets]; // Custom assets rendered separately with remove button
+    const allAssets = [...baseAssets, ...customAssetList]; // For summary table
+    const presentAssets = allAssets.filter((a) => d.criticality.assetPresence[a] === true);
+    const confirmedCount = baseAssets.filter((a) => d.criticality.assetPresence[a] !== undefined).length;
 
     return (
       <div className="space-y-6">
@@ -1401,7 +1969,7 @@ export default function App() {
                 <p className="text-xs c-text-teal mt-0.5">Confirm which assets are present, then rate their criticality.</p>
               </div>
               <span className="text-xs c-bg-light c-text-navy px-2 py-1 rounded-full font-medium">
-                {confirmedCount}/{assets.length} confirmed
+                {confirmedCount}/{allAssets.length} confirmed
               </span>
             </div>
 
@@ -1569,6 +2137,94 @@ export default function App() {
               );
             })}
 
+            {/* Custom asset cards */}
+            {customAssetList.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold c-text-navy flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">Custom</span>
+                  Custom Assets ({customAssetList.length})
+                </h3>
+                {customAssetList.map((asset) => {
+                  const score = d.criticality.assetScores[asset] || 3;
+                  const tier = getCritTier(score);
+                  const isOpen = open["a_" + asset];
+                  return (
+                    <div key={asset} className={"border-2 rounded-lg overflow-hidden " + tier.bc}>
+                      <div className={"px-4 py-3 flex items-center justify-between " + tier.bg}>
+                        <h3 className="font-semibold c-text-navy flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-xs font-medium">Custom</span>
+                          {asset}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggle("a_" + asset)} className="text-gray-400 hover:text-gray-600" tabIndex={0}>
+                            {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </button>
+                          <button onClick={() => removeCustomAsset(asset)} className="px-2 py-1 rounded-full text-xs font-semibold border bg-red-50 text-red-600 border-red-300 hover:bg-red-100" tabIndex={0}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className={"px-4 pb-2 pt-1 flex items-center gap-3 " + tier.bg}>
+                        <span className={"text-xs font-semibold px-2 py-0.5 rounded-full border " + tier.tc + " " + tier.bg + " " + tier.bc}>{tier.tier}</span>
+                        <span className="text-sm text-gray-500">Rating: <span className={"font-bold " + tier.tc}>{score}/5</span></span>
+                      </div>
+                      {isOpen && (
+                        <div className="px-4 pb-4 pt-3 bg-white border-t border-gray-100">
+                          <div className="flex justify-between items-center mb-3">
+                            <p className="text-sm font-medium c-text-navy">Criticality Rating</p>
+                            <span className={"text-2xl font-bold " + tier.tc}>{score}<span className="text-sm text-gray-400 font-normal"> /5</span></span>
+                          </div>
+                          <input type="range" min="1" max="5" step="1" value={score} onChange={(e) => setAsset(asset, e.target.value)} className="w-full" />
+                          <div className="flex justify-between text-xs text-gray-400 mt-1">
+                            <span className="w-16 text-left">Minor</span><span className="text-center">Low</span><span className="text-center">Moderate</span><span className="text-center">High</span><span className="w-20 text-right">Severe</span>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-600 italic">
+                            {score === 1 && "Limited operational impact if degraded or lost; localized inconvenience; easy workarounds."}
+                            {score === 2 && "Noticeable impact to operations or service quality, but contained; recovery is straightforward."}
+                            {score === 3 && "Material operational impact; could affect production/distribution capacity or reliability; recovery requires coordinated effort."}
+                            {score === 4 && "Significant service interruption, safety exposure, or major operational disruption; difficult recovery; high visibility."}
+                            {score === 5 && "Sustained outage or major safety/environmental consequence likely; cascading impacts beyond the site; strategic/regional significance."}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add custom asset form */}
+            <div className="border-2 border-dashed c-border-gray rounded-lg p-4">
+              <h4 className="text-sm font-semibold c-text-navy mb-2">Add Custom Asset</h4>
+              <p className="text-xs text-gray-500 mb-3">For assets not listed above (e.g., People, Vehicles, Intellectual Property)</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="custom-asset-input"
+                  placeholder="Enter asset name..."
+                  className="flex-1 p-2 border-2 c-border-gray rounded text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.target.value.trim()) {
+                      addCustomAsset(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById("custom-asset-input");
+                    if (input && input.value.trim()) {
+                      addCustomAsset(input.value);
+                      input.value = "";
+                    }
+                  }}
+                  className="px-4 py-2 c-bg-teal text-white rounded text-sm font-medium hover:opacity-90"
+                >
+                  Add Asset
+                </button>
+              </div>
+            </div>
+
             {/* Summary table — present assets only */}
             {presentAssets.length > 0 && (
               <div className="border-2 c-border-gray rounded-lg overflow-hidden">
@@ -1692,9 +2348,9 @@ export default function App() {
                     const ctrl = d.controls[id][k];
                     const responseTime = parseInt(d.facility.responseTime) || null;
                     const isResponseControl = k === "security";
-                    
+
                     return (
-                      <div key={k} className="border-2 c-border-light rounded p-3 space-y-3">
+                      <div key={k} className="border-2 c-border-light rounded p-3 space-y-3" id={`ctrl-card-${id}-${k}`}>
                         <div>
                           <h4 className="font-medium c-text-navy">{l}</h4>
                           <p className="text-xs text-gray-600">{desc}</p>
@@ -1837,6 +2493,27 @@ export default function App() {
                       </div>
                     );
                   })}
+                  {/* Additional controls not in the standard list */}
+                  <div className="border-2 border-dashed c-border-gray rounded p-3 mt-2">
+                    <label className="block text-xs font-semibold c-text-navy mb-1">
+                      Additional Controls Not Listed Above
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">Document any other {name.toLowerCase()} controls present at the facility that aren't covered by the standard options.</p>
+                    <textarea
+                      key={`additional-${id}`}
+                      defaultValue={(d.additionalControlNotes || {})[id] || ""}
+                      onBlur={(e) => setAdditionalControlNotes(id, e.target.value)}
+                      placeholder={
+                        id === "perimeter" ? "e.g., Natural barriers (river, cliff), vegetation management, buried cable detection" :
+                        id === "access" ? "e.g., Mantrap entry, biometric readers, tailgate detection" :
+                        id === "detection" ? "e.g., Thermal imaging, ground-based radar, acoustic sensors" :
+                        id === "hardening" ? "e.g., Blast film on windows, raised equipment platforms, fire suppression" :
+                        "e.g., Emergency notification system, mutual aid agreements, incident command procedures"
+                      }
+                      className="w-full p-2 border-2 c-border-gray rounded text-xs"
+                      rows={2}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1952,17 +2629,132 @@ export default function App() {
           </div>
         );
       })}
+      {/* Custom threat input */}
+      <div className="border-2 border-dashed c-border-gray rounded-lg p-4">
+        <h4 className="text-sm font-semibold c-text-navy mb-2">Add Custom Threat</h4>
+        <p className="text-xs text-gray-500 mb-3">For threats not covered in the categories above (e.g., Workplace Violence, Social Engineering, Cyber-Physical)</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            id="custom-threat-name"
+            placeholder="Threat name..."
+            className="flex-1 p-2 border-2 c-border-gray rounded text-sm"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.target.value.trim()) {
+                addCustomThreat(e.target.value, document.getElementById("custom-threat-category")?.value || "Custom");
+                e.target.value = "";
+              }
+            }}
+          />
+          <select id="custom-threat-category" className="p-2 border-2 c-border-gray rounded text-sm bg-white" defaultValue="Custom">
+            <option value="Custom">Custom</option>
+            <option value="Theft">Theft</option>
+            <option value="Vandalism and sabotage">Vandalism and sabotage</option>
+            <option value="Trespassing and unauthorized presence">Trespassing</option>
+            <option value="Targeted attack">Targeted attack</option>
+            <option value="Accidental and environmental">Accidental / Environmental</option>
+          </select>
+          <button
+            onClick={() => {
+              const nameInput = document.getElementById("custom-threat-name");
+              const catSelect = document.getElementById("custom-threat-category");
+              if (nameInput && nameInput.value.trim()) {
+                addCustomThreat(nameInput.value, catSelect?.value || "Custom");
+                nameInput.value = "";
+              }
+            }}
+            className="px-4 py-2 c-bg-teal text-white rounded text-sm font-medium hover:opacity-90"
+          >
+            Add Threat
+          </button>
+        </div>
+      </div>
+
+      {/* Custom threats — show with likelihood slider like standard threats */}
+      {(d.customThreats || []).length > 0 && (
+        <div className="border-2 c-border-gray rounded-lg overflow-hidden">
+          <div className="c-bg-light p-4 flex justify-between items-center cursor-pointer" onClick={() => toggle("custom-threats")}>
+            <h3 className="font-semibold c-text-navy flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">Custom</span>
+              Custom Threats
+            </h3>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">{(d.customThreats || []).length} added</span>
+              {open["custom-threats"] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </div>
+          {open["custom-threats"] && (
+            <div className="p-4 space-y-3 bg-white border-l-4 c-border-teal">
+              {(d.customThreats || []).map((ct) => {
+                const found = d.threats.find(t => t.name === ct.name);
+                if (!found) return null;
+                return (
+                  <div key={ct.name} className="border-2 c-border-light rounded p-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="font-medium c-text-navy">{ct.name}</span>
+                        <span className="ml-2 text-xs text-gray-500">({ct.category})</span>
+                      </div>
+                      <button onClick={() => removeCustomThreat(ct.name)} className="px-2 py-1 rounded-full text-xs font-semibold border bg-red-50 text-red-600 border-red-300 hover:bg-red-100" tabIndex={0}>Remove</button>
+                    </div>
+                    <div className="mt-3 space-y-4">
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Evidence / Indicators</p>
+                        <div className="space-y-1">
+                          {["Prior incidents", "Regional trend / High local crime"].map((ev) => (
+                            <label key={ev} className="flex items-center space-x-2 text-sm">
+                              <input type="checkbox" className="w-3 h-3" checked={found.evidence.includes(ev)}
+                                onChange={(e) => {
+                                  const newEv = e.target.checked ? [...found.evidence, ev] : found.evidence.filter((x) => x !== ev);
+                                  setEvidence(ct.name, newEv);
+                                }}
+                              />
+                              <span className="c-text-navy">{ev}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-100 pt-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <p className="text-sm font-medium c-text-navy">Threat Likelihood</p>
+                          <span className="text-xl font-bold c-text-teal">{found.likelihood || 3}<span className="text-sm text-gray-400 font-normal"> /5</span></span>
+                        </div>
+                        <input type="range" min="1" max="5" step="1" value={found.likelihood || 3} onChange={(e) => setThreatLikelihood(ct.name, e.target.value)} className="w-full" />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span className="text-left w-16">Rare</span><span className="text-center">Unlikely</span><span className="text-center">Possible</span><span className="text-center">Likely</span><span className="text-right w-20">Almost Certain</span>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-600 italic">
+                          {found.likelihood === 1 && "Not expected; would require unusual conditions or a highly atypical actor/event."}
+                          {found.likelihood === 2 && "Could happen, but not common; limited exposure, access, or motivation."}
+                          {(!found.likelihood || found.likelihood === 3) && "Credible and plausible; has occurred in the industry or region with some regularity."}
+                          {found.likelihood === 4 && "Expected to occur; frequent exposure, clear opportunity, or known active threat pattern."}
+                          {found.likelihood === 5 && "Persistent or imminent; repeated incidents, sustained targeting, or unavoidable conditions."}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {d.threats.length > 0 && (
         <div className="c-bg-light border-2 c-border-light rounded-lg p-4">
           <h4 className="font-semibold c-text-navy mb-2">Selected Threats ({d.threats.length})</h4>
           <ul className="text-sm space-y-1">
-            {d.threats.map((t) => (
-              <li key={t.name} className="flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span>{t.name}</span>
-                {t.evidence.length > 0 && <span className="text-xs text-gray-500">({t.evidence.join(", ")})</span>}
-              </li>
-            ))}
+            {d.threats.map((t) => {
+              const isCustom = (d.customThreats || []).some(ct => ct.name === t.name);
+              return (
+                <li key={t.name} className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <span>{t.name}</span>
+                  {isCustom && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Custom</span>}
+                  {t.evidence.length > 0 && <span className="text-xs text-gray-500">({t.evidence.join(", ")})</span>}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -1980,14 +2772,23 @@ export default function App() {
     // Build default risk entry for a threat (used by useEffect and render)
     const buildDefaultRisk = (threat) => {
       const mapping = THREAT_CONTROL_MAP[threat.name];
+      const isCustom = !mapping;
       const autoControls = mapping?.controls || [];
-      const availableControls = autoControls.filter(ctrlKey => {
-        const ctrl = allControlsFlat.find(c => c.key === ctrlKey);
-        return ctrl && ctrl.score > 0;
-      });
-      const subvertical = d.facility.type;
-      const relevantAssetNames = THREAT_ASSET_MAP[subvertical]?.[threat.name] || [];
-      const relevantAssets = presentAssets.filter(a => relevantAssetNames.includes(a.name));
+      let availableControls;
+      let relevantAssets;
+      if (isCustom) {
+        // Custom threats: default to ALL scored controls and ALL present assets
+        availableControls = allControlsFlat.filter(c => c.score > 0).map(c => c.key);
+        relevantAssets = presentAssets;
+      } else {
+        availableControls = autoControls.filter(ctrlKey => {
+          const ctrl = allControlsFlat.find(c => c.key === ctrlKey);
+          return ctrl && ctrl.score > 0;
+        });
+        const subvertical = d.facility.type;
+        const relevantAssetNames = THREAT_ASSET_MAP[subvertical]?.[threat.name] || [];
+        relevantAssets = presentAssets.filter(a => relevantAssetNames.includes(a.name));
+      }
       return { threat: threat.name, likelihood: threat.likelihood || 3, affectedAssets: relevantAssets, selectedControls: availableControls, treatment: "", estimatedCost: "", priority: "", owner: "", targetDate: "" };
     };
 
@@ -2514,9 +3315,12 @@ export default function App() {
             })()}
           </div>
         </div>
-        <div className="flex justify-center">
-          <button onClick={exportReport} className="flex items-center space-x-2 c-bg-teal  text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-            <Download className="w-5 h-5" /><span>Export Assessment Report</span>
+        <div className="flex justify-center gap-4">
+          <button onClick={emailAssessmentReport} className="flex items-center space-x-2 c-bg-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors hover:opacity-90">
+            <Mail className="w-5 h-5" /><span>Email Assessment Report</span>
+          </button>
+          <button onClick={exportReport} className="flex items-center space-x-2 c-bg-teal text-white px-6 py-3 rounded-lg font-semibold transition-colors hover:opacity-90">
+            <Download className="w-5 h-5" /><span>Download HTML Report</span>
           </button>
         </div>
         <div className="c-bg-light border-2 c-border-light rounded-lg p-4 text-center">

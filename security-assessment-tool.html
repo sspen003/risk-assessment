@@ -9,7 +9,7 @@
 <body class="bg-slate-100">
   <div id="root"></div>
   <script>
-(() => {
+var App = (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -21725,12 +21725,25 @@
     }
   });
 
+  // node_modules/lucide-react/dist/esm/icons/mail.js
+  var __iconNode9, Mail;
+  var init_mail = __esm({
+    "node_modules/lucide-react/dist/esm/icons/mail.js"() {
+      init_createLucideIcon();
+      __iconNode9 = [
+        ["path", { d: "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7", key: "132q7q" }],
+        ["rect", { x: "2", y: "4", width: "20", height: "16", rx: "2", key: "izxlao" }]
+      ];
+      Mail = createLucideIcon("mail", __iconNode9);
+    }
+  });
+
   // node_modules/lucide-react/dist/esm/icons/shield.js
-  var __iconNode9, Shield;
+  var __iconNode10, Shield;
   var init_shield = __esm({
     "node_modules/lucide-react/dist/esm/icons/shield.js"() {
       init_createLucideIcon();
-      __iconNode9 = [
+      __iconNode10 = [
         [
           "path",
           {
@@ -21739,16 +21752,16 @@
           }
         ]
       ];
-      Shield = createLucideIcon("shield", __iconNode9);
+      Shield = createLucideIcon("shield", __iconNode10);
     }
   });
 
   // node_modules/lucide-react/dist/esm/icons/triangle-alert.js
-  var __iconNode10, TriangleAlert;
+  var __iconNode11, TriangleAlert;
   var init_triangle_alert = __esm({
     "node_modules/lucide-react/dist/esm/icons/triangle-alert.js"() {
       init_createLucideIcon();
-      __iconNode10 = [
+      __iconNode11 = [
         [
           "path",
           {
@@ -21759,7 +21772,7 @@
         ["path", { d: "M12 9v4", key: "juzpu7" }],
         ["path", { d: "M12 17h.01", key: "p32p05" }]
       ];
-      TriangleAlert = createLucideIcon("triangle-alert", __iconNode10);
+      TriangleAlert = createLucideIcon("triangle-alert", __iconNode11);
     }
   });
 
@@ -21775,6 +21788,7 @@
       init_download();
       init_eye();
       init_lock();
+      init_mail();
       init_shield();
     }
   });
@@ -22297,6 +22311,62 @@
     const setEvidence = (name, ev) => setD((p) => ({ ...p, threats: p.threats.map((t) => t.name === name ? { ...t, evidence: ev } : t) }));
     const setThreatLikelihood = (name, likelihood) => setD((p) => ({ ...p, threats: p.threats.map((t) => t.name === name ? { ...t, likelihood: parseInt(likelihood) } : t) }));
     const setRisk = (threat, f, v) => setD((p) => ({ ...p, risks: p.risks.map((r) => r.threat === threat ? { ...r, [f]: v } : r) }));
+    const addCustomAsset = (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setD((p) => {
+        if (p.customAssets.includes(trimmed)) return p;
+        return {
+          ...p,
+          customAssets: [...p.customAssets, trimmed],
+          criticality: {
+            ...p.criticality,
+            assetPresence: { ...p.criticality.assetPresence, [trimmed]: true },
+            assetScores: { ...p.criticality.assetScores, [trimmed]: 3 }
+          }
+        };
+      });
+    };
+    const removeCustomAsset = (name) => {
+      setD((p) => {
+        const newPresence = { ...p.criticality.assetPresence };
+        const newScores = { ...p.criticality.assetScores };
+        const newPhotos = { ...p.criticality.assetPhotos || {} };
+        delete newPresence[name];
+        delete newScores[name];
+        delete newPhotos[name];
+        return {
+          ...p,
+          customAssets: p.customAssets.filter((a) => a !== name),
+          criticality: { ...p.criticality, assetPresence: newPresence, assetScores: newScores, assetPhotos: newPhotos },
+          risks: p.risks.map((r) => ({
+            ...r,
+            affectedAssets: (r.affectedAssets || []).filter((a) => a.asset !== name)
+          }))
+        };
+      });
+    };
+    const addCustomThreat = (name, category) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setD((p) => {
+        if (p.threats.find((t) => t.name === trimmed)) return p;
+        return {
+          ...p,
+          customThreats: [...p.customThreats || [], { name: trimmed, category: category || "Custom" }],
+          threats: [...p.threats, { name: trimmed, evidence: [], likelihood: 3 }]
+        };
+      });
+    };
+    const removeCustomThreat = (name) => {
+      setD((p) => ({
+        ...p,
+        customThreats: (p.customThreats || []).filter((t) => t.name !== name),
+        threats: p.threats.filter((t) => t.name !== name),
+        risks: p.risks.filter((r) => r.threat !== name)
+      }));
+    };
+    const setAdditionalControlNotes = (catId, notes) => setD((p) => ({ ...p, additionalControlNotes: { ...p.additionalControlNotes || {}, [catId]: notes } }));
     const lookupNearbyEntities = async () => {
       const address = d.facility.address;
       const coordStr = d.facility.coordinates;
@@ -22412,13 +22482,21 @@
       const presentAssets = Object.entries(d.criticality.assetPresence).filter(([_, present]) => present === true).map(([assetName]) => ({ name: assetName, criticality: d.criticality.assetScores[assetName] || 3 }));
       const newRisks = missing.map((threat) => {
         const mapping = THREAT_CONTROL_MAP[threat.name];
+        const isCustom = !mapping;
         const autoControls = mapping?.controls || [];
-        const availableControls = autoControls.filter((ctrlKey) => {
-          const ctrl = allCtrl.find((c) => c.key === ctrlKey);
-          return ctrl && ctrl.score > 0;
-        });
-        const relevantAssetNames = THREAT_ASSET_MAP[d.facility.type]?.[threat.name] || [];
-        const relevantAssets = presentAssets.filter((a) => relevantAssetNames.includes(a.name));
+        let availableControls;
+        let relevantAssets;
+        if (isCustom) {
+          availableControls = allCtrl.filter((c) => c.score > 0).map((c) => c.key);
+          relevantAssets = presentAssets;
+        } else {
+          availableControls = autoControls.filter((ctrlKey) => {
+            const ctrl = allCtrl.find((c) => c.key === ctrlKey);
+            return ctrl && ctrl.score > 0;
+          });
+          const relevantAssetNames = THREAT_ASSET_MAP[d.facility.type]?.[threat.name] || [];
+          relevantAssets = presentAssets.filter((a) => relevantAssetNames.includes(a.name));
+        }
         return { threat: threat.name, likelihood: threat.likelihood || 3, affectedAssets: relevantAssets, selectedControls: availableControls, treatment: "", estimatedCost: "", priority: "", owner: "", targetDate: "" };
       });
       setD((p) => ({ ...p, risks: [...p.risks, ...newRisks] }));
@@ -22430,19 +22508,28 @@
         let updated = false;
         const updatedRisks = p.risks.map((risk) => {
           const mapping = THREAT_CONTROL_MAP[risk.threat];
-          if (!mapping) return risk;
-          const autoControls = mapping.controls || [];
-          const shouldBeSelected = autoControls.filter((ctrlKey) => {
-            const ctrl = allCtrl.find((c) => c.key === ctrlKey);
-            return ctrl && ctrl.score > 0;
-          });
+          const isCustomThreat = !mapping;
           const currentSelected = risk.selectedControls || [];
-          const userAdded = currentSelected.filter((k) => !autoControls.includes(k));
-          const newSelected = [.../* @__PURE__ */ new Set([...shouldBeSelected, ...userAdded])];
-          const filtered = newSelected.filter((k) => {
-            const ctrl = allCtrl.find((c) => c.key === k);
-            return ctrl && ctrl.score > 0;
-          });
+          let filtered;
+          if (isCustomThreat) {
+            const allScoredKeys = allCtrl.filter((c) => c.score > 0).map((c) => c.key);
+            filtered = [.../* @__PURE__ */ new Set([...currentSelected, ...allScoredKeys])].filter((k) => {
+              const ctrl = allCtrl.find((c) => c.key === k);
+              return ctrl && ctrl.score > 0;
+            });
+          } else {
+            const autoControls = mapping.controls || [];
+            const shouldBeSelected = autoControls.filter((ctrlKey) => {
+              const ctrl = allCtrl.find((c) => c.key === ctrlKey);
+              return ctrl && ctrl.score > 0;
+            });
+            const userAdded = currentSelected.filter((k) => !autoControls.includes(k));
+            const newSelected = [.../* @__PURE__ */ new Set([...shouldBeSelected, ...userAdded])];
+            filtered = newSelected.filter((k) => {
+              const ctrl = allCtrl.find((c) => c.key === k);
+              return ctrl && ctrl.score > 0;
+            });
+          }
           if (JSON.stringify(filtered.sort()) !== JSON.stringify([...currentSelected].sort())) {
             updated = true;
             return { ...risk, selectedControls: filtered };
@@ -22485,6 +22572,411 @@
     const esc = (str) => {
       if (!str) return "";
       return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    };
+    const buildAssessmentPayload = () => {
+      const toleranceThresholds = { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2 };
+      const riskToleranceValue = d.facility.riskTolerance || 3;
+      const toleranceThreshold = toleranceThresholds[riskToleranceValue];
+      const risksWithScores = d.risks.map((risk) => {
+        const threat = d.threats.find((t) => t.name === risk.threat);
+        if (!threat || !risk.affectedAssets || risk.affectedAssets.length === 0) return null;
+        const maxCrit = Math.max(...risk.affectedAssets.map((a) => a.criticality));
+        const controlEff = risk.selectedControls.length > 0 ? calculateControlEffectiveness(threat.name, risk.selectedControls, d.controls, d.facility.responseTime) : 1;
+        const inherentRisk = maxCrit * threat.likelihood;
+        const residualRisk = inherentRisk > 0 ? inherentRisk / controlEff : 0;
+        const rl = getRiskLevel(residualRisk);
+        const exceedsTolerance = residualRisk >= toleranceThreshold;
+        return { ...risk, residualRisk, maxCrit, likelihood: threat.likelihood, controlEff, riskLevel: rl.level, exceedsTolerance };
+      }).filter(Boolean);
+      const sortedRisks = [...risksWithScores].sort((a, b) => b.residualRisk - a.residualRisk);
+      const customAssetNames = d.customAssets || [];
+      const assets = Object.entries(d.criticality.assetPresence).filter(([_, present]) => present).map((assetName) => {
+        const name = assetName[0];
+        const critScore = d.criticality.assetScores[name] || 1;
+        const critTier = getCritTier(critScore);
+        return {
+          name,
+          present: true,
+          isCustom: customAssetNames.includes(name),
+          criticalityScore: critScore,
+          criticalityTier: critTier.tier
+        };
+      });
+      const customThreatDefs = d.customThreats || [];
+      const threats = d.threats.map((t) => {
+        const catObj = THREAT_CATEGORIES.find((c) => c.threats.some((th) => th.name === t.name));
+        const threatDef = catObj ? catObj.threats.find((th) => th.name === t.name) : null;
+        const customDef = customThreatDefs.find((ct) => ct.name === t.name);
+        const tcm = THREAT_CONTROL_MAP[t.name] || {};
+        return {
+          name: t.name,
+          category: customDef ? customDef.category : catObj ? catObj.category : "Unknown",
+          isCustom: !!customDef,
+          likelihood: t.likelihood,
+          description: threatDef?.description || (customDef ? "Custom threat \u2014 no predefined description. Assessor-identified based on site-specific conditions." : ""),
+          estimatedAttackDuration: tcm.duration !== null && tcm.duration !== void 0 ? `${tcm.duration} min` : "Sustained / indeterminate",
+          applicableControls: (tcm.controls || []).map((k) => getControlLabel(k))
+        };
+      });
+      const allCtrl = getAllControlsFlat(d.controls);
+      const controlSummary = {};
+      ["perimeter", "access", "detection", "hardening", "response"].forEach((cat) => {
+        const ctrls = Object.entries(d.controls[cat] || {});
+        const scored = ctrls.filter(([_, c]) => c.score > 0);
+        const avg = scored.length > 0 ? (scored.reduce((s, [_, c]) => s + c.score, 0) / scored.length).toFixed(1) : "N/A";
+        const addlNotes = (d.additionalControlNotes || {})[cat] || null;
+        controlSummary[cat] = {
+          averageScore: avg,
+          controls: ctrls.map(([key, c]) => ({
+            key,
+            label: getControlLabel(key),
+            score: c.score,
+            rating: getCtrlRating(c.score).label,
+            notes: c.notes || null,
+            isGap: c.score > 0 && c.score < 3,
+            notAssessed: c.score === 0
+          })),
+          additionalControlsNoted: addlNotes
+        };
+      });
+      const controlGaps = allCtrl.filter((c) => c.score > 0 && c.score < 3).map((c) => ({
+        key: c.key,
+        label: getControlLabel(c.key),
+        category: c.category,
+        score: c.score,
+        rating: getCtrlRating(c.score).label,
+        notes: allCtrl.find((ac) => ac.key === c.key)?.notes || null
+      }));
+      const recMap = {
+        fencing: "Upgrade to 8' chain-link with 3-strand barbed wire, repair gaps, add anti-climb measures",
+        gates: "Install high-security locks, automated access control, vehicle barriers at entry points",
+        lighting: "Add perimeter LED lighting with backup power, eliminate dark zones around critical assets",
+        bollards: "Install crash-rated bollards (K4/K8) at vehicle approach points",
+        signage: "Post clear no-trespassing signs with contact info at all entry points and along perimeter",
+        locks: "Replace with high-security cylinders, implement a formal key control program",
+        cardReaders: "Deploy card readers at all access points, integrate with centralized monitoring",
+        visitorMgmt: "Implement sign-in system, require escorts for non-credentialed personnel, issue temporary badges",
+        credentialAcct: "Deploy badge tracking system with prompt revocation procedures upon termination",
+        cctv: "Install megapixel cameras with 30-day retention and active monitoring by SOC",
+        intrusion: "Deploy perimeter sensors (fence-mounted, volumetric), integrate with SOC for real-time alerting",
+        patrols: "Schedule regular patrols with documented rounds and mobile response capability",
+        monitoring: "Establish 24/7 Security Operations Center with video verification and dispatch protocols",
+        security: "Improve coordination with law enforcement, establish MOU, target reduced response time",
+        communications: "Install redundant communications (radio + cellular), test quarterly",
+        drone: "Deploy RF/radar drone detection system with alert and response protocols",
+        enclosures: "Add ballistic-rated or hardened enclosures for critical equipment",
+        redundancy: "Implement N+1 redundancy and geographic diversity for critical systems"
+      };
+      const risks = sortedRisks.map((risk, i) => {
+        const applicableControls = THREAT_CONTROL_MAP[risk.threat]?.controls || [];
+        const weakControls = applicableControls.map((ctrlKey) => allCtrl.find((c) => c.key === ctrlKey)).filter((c) => c && c.score > 0 && c.score < 3).sort((a, b) => a.score - b.score);
+        const unscoredControls = applicableControls.map((ctrlKey) => allCtrl.find((c) => c.key === ctrlKey)).filter((c) => c && c.score === 0);
+        const recommendations = [
+          ...weakControls.slice(0, 4).map((c) => ({
+            control: getControlLabel(c.key),
+            currentScore: c.score,
+            action: recMap[c.key] || "Improve implementation and maintenance"
+          })),
+          ...unscoredControls.slice(0, 2).map((c) => ({
+            control: getControlLabel(c.key),
+            currentScore: "Not assessed",
+            action: "Consider implementing this control for this threat"
+          }))
+        ];
+        const justification = buildRiskJustification(risk, weakControls, d.facility);
+        return {
+          rank: i + 1,
+          threat: risk.threat,
+          riskLevel: risk.riskLevel,
+          riskIndex: getRiskDisplayScore(risk.residualRisk),
+          rawScore: parseFloat(risk.residualRisk.toFixed(2)),
+          exceedsTolerance: risk.exceedsTolerance,
+          affectedAssets: risk.affectedAssets.map((a) => ({ name: a.asset, criticality: a.criticality })),
+          maxAssetCriticality: risk.maxCrit,
+          threatLikelihood: risk.likelihood,
+          controlEffectiveness: parseFloat(risk.controlEff.toFixed(2)),
+          inherentRiskRaw: parseFloat((risk.maxCrit * risk.likelihood).toFixed(2)),
+          treatmentPlan: risk.treatment || null,
+          estimatedCost: risk.estimatedCost || null,
+          justification,
+          recommendations
+        };
+      });
+      const stats = {
+        totalRisks: sortedRisks.length,
+        riskTolerance: riskToleranceValue,
+        exceedsToleranceCount: sortedRisks.filter((r) => r.exceedsTolerance).length,
+        extremeCount: sortedRisks.filter((r) => r.residualRisk >= 10).length,
+        highCount: sortedRisks.filter((r) => r.residualRisk >= 7 && r.residualRisk < 10).length,
+        moderateCount: sortedRisks.filter((r) => r.residualRisk >= 4 && r.residualRisk < 7).length,
+        lowCount: sortedRisks.filter((r) => r.residualRisk < 4).length,
+        totalControlGaps: controlGaps.length,
+        criticalGaps: controlGaps.filter((g) => g.score === 1).length
+      };
+      const siteContext = {};
+      const locAttr = d.facility.locationAttributes;
+      const visibility = d.facility.visibility;
+      if (locAttr && LOCATION_RISK_CONTEXT[locAttr]) {
+        const ctx = LOCATION_RISK_CONTEXT[locAttr];
+        siteContext.locationClassification = {
+          type: locAttr,
+          summary: ctx.summary,
+          leNote: ctx.leNote,
+          elevatedThreats: ctx.elevated,
+          reducedThreats: ctx.reduced
+        };
+      }
+      if (visibility && VISIBILITY_RISK_CONTEXT[visibility]) {
+        const ctx = VISIBILITY_RISK_CONTEXT[visibility];
+        siteContext.roadVisibility = {
+          level: visibility,
+          summary: ctx.summary,
+          elevatedThreats: ctx.elevated,
+          reducedThreats: ctx.reduced
+        };
+      }
+      const confirmedEntities = (d.facility.nearbyEntities || []).filter((e) => e.confirmed);
+      const adjKeywordEntities = (() => {
+        const notes = (d.facility.adjacencyNotes || "").toLowerCase();
+        const found = [];
+        const seenTypes = /* @__PURE__ */ new Set();
+        ADJACENCY_KEYWORDS.forEach(({ keywords, type }) => {
+          if (seenTypes.has(type)) return;
+          if (keywords.some((kw) => notes.includes(kw))) {
+            const cat = ENTITY_CATEGORIES[type];
+            if (cat) {
+              found.push({ type, label: cat.label, fromNotes: true });
+              seenTypes.add(type);
+            }
+          }
+        });
+        return found;
+      })();
+      const allEntities = [...confirmedEntities, ...adjKeywordEntities.filter((ae) => !confirmedEntities.some((ce) => ce.type === ae.type))];
+      if (allEntities.length > 0) {
+        siteContext.adjacentEntities = allEntities.map((e) => {
+          const cat = ENTITY_CATEGORIES[e.type] || {};
+          return {
+            type: e.type,
+            name: e.name || e.label || cat.label,
+            source: e.fromNotes ? "Assessor notes" : e.distance ? `Detected (${Math.round(e.distance * 3.28084)}ft)` : "Detected",
+            increasedThreats: cat.increasedThreats || [],
+            decreasedThreats: cat.decreasedThreats || [],
+            note: cat.note || ""
+          };
+        });
+      }
+      const controlScoringCriteria = {
+        "0 - N/A": "Control not applicable to this asset type.",
+        "1 - Ineffective": "Control is absent, routinely bypassed, nonfunctional, or purely on paper. No meaningful delay or detection capability; incidents discovered hours or days later. Coverage is spotty with major gaps; response is unreliable or undefined.",
+        "2 - Weak": "Control exists but is inconsistent (limited coverage/hours), outdated, or poorly maintained. May provide 1-3 minutes of delay or require extended time for SOC assessment. Procedures are informal; alarms/events often not acted on or response is slow/unpredictable.",
+        "3 - Adequate": "Control is generally present and working; known gaps exist but are manageable. Provides 3-10 minutes of delay and/or detection within 2-5 minutes; SOC can verify and dispatch during business hours. Basic governance and maintenance are in place.",
+        "4 - Strong": "Control is well-designed and consistently applied with few meaningful gaps. Provides 10-20 minutes of delay and/or real-time detection with SOC verification and dispatch within minutes. Good maintenance discipline; clear ownership; effective monitoring/dispatch.",
+        "5 - Robust": "Control is layered, validated, and resilient (redundancy, uptime monitoring, testing). Provides 20+ minutes of delay and/or immediate detection (under 1 minute) with 24/7 SOC response and verified rapid dispatch. Continuous improvement through metrics/reviews."
+      };
+      const photoEvidence = {};
+      const assetPhotos = Object.entries(d.criticality.assetPhotos || {}).filter(([_, v]) => Array.isArray(v) && v.length > 0);
+      const ctrlPhotos = Object.entries(d.controlPhotos || {}).filter(([_, v]) => Array.isArray(v) && v.length > 0);
+      if (assetPhotos.length > 0) {
+        photoEvidence.assetPhotos = assetPhotos.map(([asset, photos]) => ({
+          asset,
+          photoCount: photos.length,
+          photoNames: photos.map((p) => p.name).filter(Boolean)
+        }));
+      }
+      if (ctrlPhotos.length > 0) {
+        photoEvidence.controlPhotos = ctrlPhotos.map(([key, photos]) => {
+          const parts = key.split("-");
+          const controlKey = parts[parts.length - 1];
+          return {
+            control: getControlLabel(controlKey) || key,
+            photoCount: photos.length,
+            photoNames: photos.map((p) => p.name).filter(Boolean)
+          };
+        });
+      }
+      return {
+        meta: {
+          reportType: "Physical Security Risk Assessment",
+          version: "1.2",
+          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          facilityId: d.facility.facilityId || "Not specified",
+          client: d.facility.clientName || "Not specified"
+        },
+        facility: {
+          client: d.facility.clientName,
+          facilityId: d.facility.facilityId,
+          subvertical: d.facility.type,
+          assessmentDate: d.facility.date,
+          assessor: d.facility.assessor,
+          assessorEmail: d.facility.assessorEmail,
+          address: d.facility.address,
+          coordinates: d.facility.coordinates,
+          locationClassification: d.facility.locationAttributes || null,
+          roadVisibility: d.facility.visibility || null,
+          leResponseTime: d.facility.responseTime ? `${d.facility.responseTime} min` : null,
+          riskTolerance: riskToleranceValue,
+          adjacencyNotes: d.facility.adjacencyNotes || null
+        },
+        siteContext,
+        executiveSummary: stats,
+        assets,
+        threats,
+        securityControls: controlSummary,
+        controlScoringCriteria,
+        controlGaps,
+        risks,
+        photoEvidence: assetPhotos.length > 0 || ctrlPhotos.length > 0 ? photoEvidence : void 0
+      };
+    };
+    function buildRiskJustification(risk, weakControls, facility) {
+      const parts = [];
+      if (risk.riskLevel === "EXTREME" || risk.riskLevel === "HIGH") {
+        parts.push(`Rated ${risk.riskLevel} (Index ${getRiskDisplayScore(risk.residualRisk)}/100) due to high asset criticality (${risk.maxCrit}/5) combined with threat likelihood (${risk.likelihood}/5).`);
+      } else {
+        parts.push(`Rated ${risk.riskLevel} (Index ${getRiskDisplayScore(risk.residualRisk)}/100) based on asset criticality (${risk.maxCrit}/5) and threat likelihood (${risk.likelihood}/5).`);
+      }
+      if (weakControls.length > 0) {
+        const weakNames = weakControls.slice(0, 3).map((c) => getControlLabel(c.key) + ` (${c.score}/5)`).join(", ");
+        parts.push(`Weak control posture identified: ${weakNames}.`);
+      } else {
+        parts.push(`Applicable controls are rated adequate or above.`);
+      }
+      if (risk.exceedsTolerance) {
+        parts.push(`This risk EXCEEDS the organization's stated risk tolerance (${facility.riskTolerance || 3}/5) and requires treatment.`);
+      }
+      if (facility.responseTime) {
+        const dur = THREAT_CONTROL_MAP[risk.threat]?.duration;
+        if (dur !== null && dur !== void 0 && parseInt(facility.responseTime) > dur) {
+          parts.push(`LE response time (${facility.responseTime} min) exceeds estimated attack duration (${dur} min), limiting response effectiveness.`);
+        }
+      }
+      return parts.join(" ");
+    }
+    const formatPayloadForEmail = (payload) => {
+      const lines = [];
+      lines.push("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+      lines.push("PHYSICAL SECURITY RISK ASSESSMENT REPORT");
+      lines.push("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+      lines.push("");
+      lines.push(`Client: ${payload.facility.client || "N/A"}`);
+      lines.push(`Facility: ${payload.facility.facilityId || "N/A"}`);
+      lines.push(`Subvertical: ${payload.facility.subvertical || "N/A"}`);
+      lines.push(`Date: ${payload.facility.assessmentDate || "N/A"}`);
+      lines.push(`Assessor: ${payload.facility.assessor || "N/A"}`);
+      lines.push(`Location: ${payload.facility.locationClassification || "N/A"} | Visibility: ${payload.facility.roadVisibility || "N/A"}`);
+      lines.push(`LE Response: ${payload.facility.leResponseTime || "N/A"}`);
+      lines.push(`Risk Tolerance: ${payload.facility.riskTolerance}/5`);
+      lines.push("");
+      lines.push("\u2500\u2500 EXECUTIVE SUMMARY \u2500\u2500");
+      const s = payload.executiveSummary;
+      lines.push(`Total Risks: ${s.totalRisks} | Exceeds Tolerance: ${s.exceedsToleranceCount}`);
+      lines.push(`  EXTREME: ${s.extremeCount} | HIGH: ${s.highCount} | MODERATE: ${s.moderateCount} | LOW: ${s.lowCount}`);
+      lines.push(`  Control Gaps: ${s.totalControlGaps} (${s.criticalGaps} critical)`);
+      lines.push("");
+      if (payload.siteContext && Object.keys(payload.siteContext).length > 0) {
+        lines.push("\u2500\u2500 SITE CONTEXT MODIFIERS \u2500\u2500");
+        if (payload.siteContext.locationClassification) {
+          const loc = payload.siteContext.locationClassification;
+          lines.push(`  Location: ${loc.type}`);
+          lines.push(`  ${loc.summary}`);
+          lines.push(`  ${loc.leNote}`);
+          if (loc.elevatedThreats.length) lines.push(`  Elevated: ${loc.elevatedThreats.join(", ")}`);
+          if (loc.reducedThreats.length) lines.push(`  Reduced: ${loc.reducedThreats.join(", ")}`);
+        }
+        if (payload.siteContext.roadVisibility) {
+          const vis = payload.siteContext.roadVisibility;
+          lines.push(`  Visibility: ${vis.level} \u2014 ${vis.summary}`);
+          if (vis.elevatedThreats.length) lines.push(`  Elevated: ${vis.elevatedThreats.join(", ")}`);
+          if (vis.reducedThreats.length) lines.push(`  Reduced: ${vis.reducedThreats.join(", ")}`);
+        }
+        if (payload.siteContext.adjacentEntities) {
+          lines.push(`  Adjacent Entities (${payload.siteContext.adjacentEntities.length}):`);
+          payload.siteContext.adjacentEntities.forEach((e) => {
+            lines.push(`    ${e.name} (${e.source}) \u2014 ${e.note}`);
+          });
+        }
+        lines.push("");
+      }
+      lines.push("\u2500\u2500 ASSETS \u2500\u2500");
+      payload.assets.forEach((a) => {
+        lines.push(`  [${a.criticalityScore}/5 ${a.criticalityTier}] ${a.name}${a.isCustom ? " (Custom)" : ""}`);
+      });
+      lines.push("");
+      lines.push("\u2500\u2500 THREATS \u2500\u2500");
+      payload.threats.forEach((t) => {
+        lines.push(`  [Likelihood ${t.likelihood}/5] ${t.name} (${t.category})${t.isCustom ? " [Custom]" : ""}`);
+        lines.push(`    ${t.description}`);
+        if (!t.isCustom) {
+          lines.push(`    Attack Duration: ${t.estimatedAttackDuration} | Applicable Controls: ${t.applicableControls.join(", ")}`);
+        }
+      });
+      lines.push("");
+      lines.push("\u2500\u2500 SECURITY CONTROLS \u2500\u2500");
+      Object.entries(payload.securityControls).forEach(([cat, data]) => {
+        lines.push(`  ${cat.toUpperCase()} (Avg: ${data.averageScore}/5)`);
+        data.controls.forEach((c) => {
+          if (c.score > 0) lines.push(`    ${c.label}: ${c.score}/5 (${c.rating})${c.notes ? " -- " + c.notes : ""}`);
+        });
+        if (data.additionalControlsNoted) {
+          lines.push(`    Additional controls noted: ${data.additionalControlsNoted}`);
+        }
+      });
+      lines.push("");
+      if (payload.controlGaps.length > 0) {
+        lines.push("\u2500\u2500 CONTROL GAPS \u2500\u2500");
+        payload.controlGaps.forEach((g) => {
+          lines.push(`  [${g.score}/5 - ${g.rating}] ${g.label} (${g.category})${g.notes ? " -- " + g.notes : ""}`);
+        });
+        lines.push("");
+      }
+      lines.push("\u2500\u2500 RISK ANALYSIS \u2500\u2500");
+      payload.risks.forEach((r) => {
+        lines.push("");
+        lines.push(`#${r.rank} ${r.threat} \u2014 ${r.riskLevel} (Index ${r.riskIndex}/100)${r.exceedsTolerance ? " ** EXCEEDS TOLERANCE **" : ""}`);
+        lines.push(`  Assets: ${r.affectedAssets.map((a) => a.name + " (" + a.criticality + "/5)").join(", ")}`);
+        lines.push(`  Inherent Risk: ${r.inherentRiskRaw} | Control Eff: ${r.controlEffectiveness} | Residual: ${r.rawScore}`);
+        lines.push(`  Justification: ${r.justification}`);
+        if (r.treatmentPlan) lines.push(`  Treatment: ${r.treatmentPlan}`);
+        if (r.estimatedCost) lines.push(`  Est. Cost: ${r.estimatedCost}`);
+        if (r.recommendations.length > 0) {
+          lines.push("  Recommendations:");
+          r.recommendations.forEach((rec) => {
+            lines.push(`    - ${rec.control} (${rec.currentScore}/5): ${rec.action}`);
+          });
+        }
+      });
+      if (payload.photoEvidence) {
+        lines.push("");
+        lines.push("\u2500\u2500 PHOTO EVIDENCE \u2500\u2500");
+        if (payload.photoEvidence.assetPhotos) {
+          payload.photoEvidence.assetPhotos.forEach((p) => {
+            lines.push(`  Asset: ${p.asset} \u2014 ${p.photoCount} photo(s)`);
+          });
+        }
+        if (payload.photoEvidence.controlPhotos) {
+          payload.photoEvidence.controlPhotos.forEach((p) => {
+            lines.push(`  Control: ${p.control} \u2014 ${p.photoCount} photo(s)`);
+          });
+        }
+      }
+      lines.push("");
+      lines.push("\u2500\u2500 CONTROL SCORING CRITERIA REFERENCE \u2500\u2500");
+      Object.entries(payload.controlScoringCriteria).forEach(([level, desc]) => {
+        lines.push(`  ${level}: ${desc}`);
+      });
+      lines.push("");
+      lines.push("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+      lines.push(`Generated: ${payload.meta.generatedAt}`);
+      lines.push("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+      return lines.join("\n");
+    };
+    const emailAssessmentReport = () => {
+      const payload = buildAssessmentPayload();
+      const emailBody = formatPayloadForEmail(payload);
+      const subject = `Security Assessment Report - ${payload.facility.facilityId || "Facility"} - ${payload.facility.client || "Client"} - ${payload.facility.assessmentDate || ""}`;
+      const mailto = `mailto:scott.spencer@convergint.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+      window.open(mailto, "_blank");
     };
     const exportReport = () => {
       const toleranceThresholds = { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2 };
@@ -23016,9 +23508,12 @@
     });
     const AssetCriticality = () => {
       const sub = d.facility.type;
-      const assets = sub ? ASSETS_BY_SUBVERTICAL[sub] || [] : [];
-      const presentAssets = assets.filter((a) => d.criticality.assetPresence[a] === true);
-      const confirmedCount = assets.filter((a) => d.criticality.assetPresence[a] !== void 0).length;
+      const baseAssets = sub ? ASSETS_BY_SUBVERTICAL[sub] || [] : [];
+      const customAssetList = d.customAssets || [];
+      const assets = [...baseAssets];
+      const allAssets = [...baseAssets, ...customAssetList];
+      const presentAssets = allAssets.filter((a) => d.criticality.assetPresence[a] === true);
+      const confirmedCount = baseAssets.filter((a) => d.criticality.assetPresence[a] !== void 0).length;
       return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "space-y-6", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { className: "text-2xl font-bold c-text-navy c-bg-light px-4 py-2 rounded-lg inline-block border-l-4 c-border-red", children: "Asset Criticality Assessment" }),
         !sub ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "bg-yellow-50 border border-yellow-300 rounded-lg p-5 text-center", children: [
@@ -23034,7 +23529,7 @@
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xs c-bg-light c-text-navy px-2 py-1 rounded-full font-medium", children: [
               confirmedCount,
               "/",
-              assets.length,
+              allAssets.length,
               " confirmed"
             ] })
           ] }),
@@ -23196,6 +23691,100 @@
               ] })
             ] }, asset);
           }),
+          customAssetList.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "space-y-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { className: "text-sm font-semibold c-text-navy flex items-center gap-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs", children: "Custom" }),
+              "Custom Assets (",
+              customAssetList.length,
+              ")"
+            ] }),
+            customAssetList.map((asset) => {
+              const score = d.criticality.assetScores[asset] || 3;
+              const tier = getCritTier(score);
+              const isOpen = open["a_" + asset];
+              return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 rounded-lg overflow-hidden " + tier.bc, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-4 py-3 flex items-center justify-between " + tier.bg, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { className: "font-semibold c-text-navy flex items-center gap-2", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-xs font-medium", children: "Custom" }),
+                    asset
+                  ] }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex items-center gap-2", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => toggle("a_" + asset), className: "text-gray-400 hover:text-gray-600", tabIndex: 0, children: isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronUp, { className: "w-5 h-5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "w-5 h-5" }) }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => removeCustomAsset(asset), className: "px-2 py-1 rounded-full text-xs font-semibold border bg-red-50 text-red-600 border-red-300 hover:bg-red-100", tabIndex: 0, children: "Remove" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-4 pb-2 pt-1 flex items-center gap-3 " + tier.bg, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs font-semibold px-2 py-0.5 rounded-full border " + tier.tc + " " + tier.bg + " " + tier.bc, children: tier.tier }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-sm text-gray-500", children: [
+                    "Rating: ",
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "font-bold " + tier.tc, children: [
+                      score,
+                      "/5"
+                    ] })
+                  ] })
+                ] }),
+                isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-4 pb-4 pt-3 bg-white border-t border-gray-100", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between items-center mb-3", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-sm font-medium c-text-navy", children: "Criticality Rating" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-2xl font-bold " + tier.tc, children: [
+                      score,
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-sm text-gray-400 font-normal", children: " /5" })
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "range", min: "1", max: "5", step: "1", value: score, onChange: (e) => setAsset(asset, e.target.value), className: "w-full" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between text-xs text-gray-400 mt-1", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-16 text-left", children: "Minor" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Low" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Moderate" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "High" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-20 text-right", children: "Severe" })
+                  ] }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 text-xs text-gray-600 italic", children: [
+                    score === 1 && "Limited operational impact if degraded or lost; localized inconvenience; easy workarounds.",
+                    score === 2 && "Noticeable impact to operations or service quality, but contained; recovery is straightforward.",
+                    score === 3 && "Material operational impact; could affect production/distribution capacity or reliability; recovery requires coordinated effort.",
+                    score === 4 && "Significant service interruption, safety exposure, or major operational disruption; difficult recovery; high visibility.",
+                    score === 5 && "Sustained outage or major safety/environmental consequence likely; cascading impacts beyond the site; strategic/regional significance."
+                  ] })
+                ] })
+              ] }, asset);
+            })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 border-dashed c-border-gray rounded-lg p-4", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { className: "text-sm font-semibold c-text-navy mb-2", children: "Add Custom Asset" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-xs text-gray-500 mb-3", children: "For assets not listed above (e.g., People, Vehicles, Intellectual Property)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex gap-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                "input",
+                {
+                  type: "text",
+                  id: "custom-asset-input",
+                  placeholder: "Enter asset name...",
+                  className: "flex-1 p-2 border-2 c-border-gray rounded text-sm",
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter" && e.target.value.trim()) {
+                      addCustomAsset(e.target.value);
+                      e.target.value = "";
+                    }
+                  }
+                }
+              ),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                "button",
+                {
+                  onClick: () => {
+                    const input = document.getElementById("custom-asset-input");
+                    if (input && input.value.trim()) {
+                      addCustomAsset(input.value);
+                      input.value = "";
+                    }
+                  },
+                  className: "px-4 py-2 c-bg-teal text-white rounded text-sm font-medium hover:opacity-90",
+                  children: "Add Asset"
+                }
+              )
+            ] })
+          ] }),
           presentAssets.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 c-border-gray rounded-lg overflow-hidden", children: [
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "bg-gray-700 px-4 py-3 flex items-center justify-between", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { className: "text-sm font-semibold text-white", children: "Asset Criticality Summary" }),
@@ -23319,168 +23908,189 @@
               ] }),
               isOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronUp, { className: "w-5 h-5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "w-5 h-5" })
             ] }),
-            isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "p-4 space-y-4 bg-white border-l-4 c-border-teal", children: ctrls.map(({ k, l, d: desc }) => {
-              const ctrl = d.controls[id][k];
-              const responseTime = parseInt(d.facility.responseTime) || null;
-              const isResponseControl = k === "security";
-              return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 c-border-light rounded p-3 space-y-3", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { className: "font-medium c-text-navy", children: l }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-xs text-gray-600", children: desc }),
-                  isResponseControl && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 p-2 c-bg-light border-2 c-border-light rounded text-xs", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "font-medium c-text-navy mb-1", children: [
-                      "Response Time: ",
-                      responseTime ? `${responseTime} min` : "Not specified"
-                    ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "c-text-teal", children: [
-                      !responseTime && "\u26A0\uFE0F Enter response time in Facility Profile to auto-calculate score",
-                      responseTime && responseTime <= 5 && "\u2713 Excellent \u2014 Score auto-set to 5 (Robust). Aligns with top-quartile urban response.",
-                      responseTime && responseTime > 5 && responseTime <= 10 && "\u2713 Good \u2014 Score auto-set to 4 (Strong). Consistent with national urban average.",
-                      responseTime && responseTime > 10 && responseTime <= 20 && "\u24D8 Adequate \u2014 Score auto-set to 3. Typical suburban response window.",
-                      responseTime && responseTime > 20 && responseTime <= 30 && "\u26A0\uFE0F Weak \u2014 Score auto-set to 2. Extended response; most attacks complete before arrival.",
-                      responseTime && responseTime > 30 && "\u26A0\uFE0F Ineffective \u2014 Score auto-set to 1. Response time exceeds virtually all attack durations."
-                    ] })
-                  ] })
-                ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between items-center mb-2", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "text-sm font-medium c-text-navy", children: [
-                      "Control Effectiveness ",
-                      isResponseControl && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs font-normal text-gray-500", children: "(auto-calculated)" })
-                    ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xl font-bold c-text-teal", children: [
-                      ctrl.score === 0 ? "N/A" : ctrl.score,
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-sm text-gray-400 font-normal", children: [
-                        " ",
-                        ctrl.score === 0 ? "" : "/5"
+            isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "p-4 space-y-4 bg-white border-l-4 c-border-teal", children: [
+              ctrls.map(({ k, l, d: desc }) => {
+                const ctrl = d.controls[id][k];
+                const responseTime = parseInt(d.facility.responseTime) || null;
+                const isResponseControl = k === "security";
+                return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 c-border-light rounded p-3 space-y-3", id: `ctrl-card-${id}-${k}`, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { className: "font-medium c-text-navy", children: l }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-xs text-gray-600", children: desc }),
+                    isResponseControl && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 p-2 c-bg-light border-2 c-border-light rounded text-xs", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "font-medium c-text-navy mb-1", children: [
+                        "Response Time: ",
+                        responseTime ? `${responseTime} min` : "Not specified"
+                      ] }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "c-text-teal", children: [
+                        !responseTime && "\u26A0\uFE0F Enter response time in Facility Profile to auto-calculate score",
+                        responseTime && responseTime <= 5 && "\u2713 Excellent \u2014 Score auto-set to 5 (Robust). Aligns with top-quartile urban response.",
+                        responseTime && responseTime > 5 && responseTime <= 10 && "\u2713 Good \u2014 Score auto-set to 4 (Strong). Consistent with national urban average.",
+                        responseTime && responseTime > 10 && responseTime <= 20 && "\u24D8 Adequate \u2014 Score auto-set to 3. Typical suburban response window.",
+                        responseTime && responseTime > 20 && responseTime <= 30 && "\u26A0\uFE0F Weak \u2014 Score auto-set to 2. Extended response; most attacks complete before arrival.",
+                        responseTime && responseTime > 30 && "\u26A0\uFE0F Ineffective \u2014 Score auto-set to 1. Response time exceeds virtually all attack durations."
                       ] })
                     ] })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                    "input",
-                    {
-                      type: "range",
-                      min: "0",
-                      max: "5",
-                      step: "1",
-                      value: ctrl.score,
-                      onChange: (e) => !isResponseControl && setCtrl(id, k, "score", e.target.value),
-                      disabled: isResponseControl,
-                      className: "w-full " + (isResponseControl ? "opacity-50 cursor-not-allowed" : "")
-                    }
-                  ),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between text-xs text-gray-400 mt-1", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-16 text-left", children: "N/A" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-20 text-left", children: "Ineffective" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Weak" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Adequate" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Strong" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-16 text-right", children: "Robust" })
-                  ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 text-xs text-gray-600 italic", children: [
-                    ctrl.score === 0 && "Control not applicable to this asset type (e.g., control room doesn't have perimeter fencing).",
-                    ctrl.score === 1 && 'Control is absent, routinely bypassed, nonfunctional, or purely "on paper." No meaningful delay or detection capability; incidents discovered hours or days later, typically during routine site visits. Coverage is spotty with major gaps; response is unreliable or undefined.',
-                    ctrl.score === 2 && "Control exists but is inconsistent (limited coverage/hours), outdated, or poorly maintained. May provide 1-3 minutes of delay or require extended time for SOC assessment. Procedures are informal; alarms/events often not acted on or response is slow/unpredictable.",
-                    ctrl.score === 3 && "Control is generally present and working; known gaps exist but are manageable. Provides 3-10 minutes of delay and/or detection within 2-5 minutes; SOC can verify and dispatch during business hours. Basic governance and maintenance are in place; response works but may be business-hours or limited.",
-                    ctrl.score === 4 && "Control is well-designed and consistently applied with few meaningful gaps. Provides 10-20 minutes of delay and/or real-time detection with SOC verification and dispatch within minutes. Good maintenance discipline; clear ownership; effective monitoring/dispatch; response is reliable.",
-                    ctrl.score === 5 && "Control is layered, validated, and resilient (redundancy, uptime monitoring, testing). Provides 20+ minutes of delay and/or immediate detection (under 1 minute) with 24/7 SOC response and verified rapid dispatch. High consistency across shifts/sites; rapid verified response; continuous improvement through metrics/reviews."
-                  ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-3", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "block text-xs font-medium c-text-navy mb-1", children: [
-                      "Notes / Justification ",
-                      ctrl.score === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-gray-500", children: "(Why is this N/A?)" }),
-                      ctrl.score > 0 && ctrl.score <= 2 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-gray-500", children: "(Why rated low?)" })
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between items-center mb-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "text-sm font-medium c-text-navy", children: [
+                        "Control Effectiveness ",
+                        isResponseControl && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs font-normal text-gray-500", children: "(auto-calculated)" })
+                      ] }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xl font-bold c-text-teal", children: [
+                        ctrl.score === 0 ? "N/A" : ctrl.score,
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-sm text-gray-400 font-normal", children: [
+                          " ",
+                          ctrl.score === 0 ? "" : "/5"
+                        ] })
+                      ] })
                     ] }),
                     /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                      "textarea",
+                      "input",
                       {
-                        defaultValue: ctrl.notes || "",
-                        onBlur: (e) => setCtrl(id, k, "notes", e.target.value),
-                        placeholder: ctrl.score === 0 ? "e.g., Remote facility has no perimeter" : k === "fencing" ? "e.g., Chain-link only, no barbed wire, gaps at rear" : k === "lighting" ? "e.g., Only front gate illuminated, dark spots along east side" : k === "cctv" ? "e.g., Cameras present but not monitored, no recording" : k === "intrusion" ? "e.g., Sensors installed but alarms not connected to SOC" : k === "monitoring" ? "e.g., Business hours only, no 24/7 coverage" : k === "locks" ? "e.g., Standard padlocks, no high-security cylinders" : k === "cardReaders" ? "e.g., Card readers at main gate only, side doors mechanical" : k === "credentialAcct" ? "e.g., No badge tracking system, contractors keep credentials" : "e.g., Specific gaps or implementation details",
-                        className: "w-full p-2 border-2 c-border-gray rounded text-xs",
-                        rows: 2
-                      },
-                      `${id}-${k}-notes`
-                    )
-                  ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-3", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "block text-xs font-medium c-text-navy mb-2", children: [
-                      "Optional: Attach Photos",
-                      ((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full", children: [
-                        (d.controlPhotos || {})[`${id}-${k}`].length,
-                        " photo",
-                        (d.controlPhotos || {})[`${id}-${k}`].length !== 1 ? "s" : ""
-                      ] })
+                        type: "range",
+                        min: "0",
+                        max: "5",
+                        step: "1",
+                        value: ctrl.score,
+                        onChange: (e) => !isResponseControl && setCtrl(id, k, "score", e.target.value),
+                        disabled: isResponseControl,
+                        className: "w-full " + (isResponseControl ? "opacity-50 cursor-not-allowed" : "")
+                      }
+                    ),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between text-xs text-gray-400 mt-1", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-16 text-left", children: "N/A" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-20 text-left", children: "Ineffective" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Weak" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Adequate" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Strong" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-16 text-right", children: "Robust" })
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex items-center gap-2", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 text-xs text-gray-600 italic", children: [
+                      ctrl.score === 0 && "Control not applicable to this asset type (e.g., control room doesn't have perimeter fencing).",
+                      ctrl.score === 1 && 'Control is absent, routinely bypassed, nonfunctional, or purely "on paper." No meaningful delay or detection capability; incidents discovered hours or days later, typically during routine site visits. Coverage is spotty with major gaps; response is unreliable or undefined.',
+                      ctrl.score === 2 && "Control exists but is inconsistent (limited coverage/hours), outdated, or poorly maintained. May provide 1-3 minutes of delay or require extended time for SOC assessment. Procedures are informal; alarms/events often not acted on or response is slow/unpredictable.",
+                      ctrl.score === 3 && "Control is generally present and working; known gaps exist but are manageable. Provides 3-10 minutes of delay and/or detection within 2-5 minutes; SOC can verify and dispatch during business hours. Basic governance and maintenance are in place; response works but may be business-hours or limited.",
+                      ctrl.score === 4 && "Control is well-designed and consistently applied with few meaningful gaps. Provides 10-20 minutes of delay and/or real-time detection with SOC verification and dispatch within minutes. Good maintenance discipline; clear ownership; effective monitoring/dispatch; response is reliable.",
+                      ctrl.score === 5 && "Control is layered, validated, and resilient (redundancy, uptime monitoring, testing). Provides 20+ minutes of delay and/or immediate detection (under 1 minute) with 24/7 SOC response and verified rapid dispatch. High consistency across shifts/sites; rapid verified response; continuous improvement through metrics/reviews."
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-3", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "block text-xs font-medium c-text-navy mb-1", children: [
+                        "Notes / Justification ",
+                        ctrl.score === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-gray-500", children: "(Why is this N/A?)" }),
+                        ctrl.score > 0 && ctrl.score <= 2 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-gray-500", children: "(Why rated low?)" })
+                      ] }),
                       /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                        "input",
+                        "textarea",
                         {
-                          type: "file",
-                          id: `control-photo-${id}-${k}`,
-                          accept: "image/*",
-                          multiple: true,
-                          onChange: (e) => {
-                            handleControlPhotoUpload(`${id}-${k}`, e.target.files);
-                            e.target.value = "";
-                          },
-                          className: "hidden"
-                        }
-                      ),
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                        "input",
-                        {
-                          type: "file",
-                          id: `control-camera-${id}-${k}`,
-                          accept: "image/*",
-                          capture: "environment",
-                          onChange: (e) => {
-                            handleControlPhotoUpload(`${id}-${k}`, e.target.files);
-                            e.target.value = "";
-                          },
-                          className: "hidden"
-                        }
-                      ),
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-                        "button",
-                        {
-                          onClick: () => document.getElementById(`control-camera-${id}-${k}`).click(),
-                          className: "flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium",
-                          title: "Take photo with camera",
-                          tabIndex: 0,
-                          children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4" }),
-                            "Take Photo"
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                        "button",
-                        {
-                          onClick: () => document.getElementById(`control-photo-${id}-${k}`).click(),
-                          className: "flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium",
-                          title: "Choose from gallery",
-                          tabIndex: 0,
-                          children: "+ Gallery"
-                        }
+                          defaultValue: ctrl.notes || "",
+                          onBlur: (e) => setCtrl(id, k, "notes", e.target.value),
+                          placeholder: ctrl.score === 0 ? "e.g., Remote facility has no perimeter" : k === "fencing" ? "e.g., Chain-link only, no barbed wire, gaps at rear" : k === "lighting" ? "e.g., Only front gate illuminated, dark spots along east side" : k === "cctv" ? "e.g., Cameras present but not monitored, no recording" : k === "intrusion" ? "e.g., Sensors installed but alarms not connected to SOC" : k === "monitoring" ? "e.g., Business hours only, no 24/7 coverage" : k === "locks" ? "e.g., Standard padlocks, no high-security cylinders" : k === "cardReaders" ? "e.g., Card readers at main gate only, side doors mechanical" : k === "credentialAcct" ? "e.g., No badge tracking system, contractors keep credentials" : "e.g., Specific gaps or implementation details",
+                          className: "w-full p-2 border-2 c-border-gray rounded text-xs",
+                          rows: 2
+                        },
+                        `${id}-${k}-notes`
                       )
                     ] }),
-                    ((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "flex flex-wrap gap-2 mt-2", children: ((d.controlPhotos || {})[`${id}-${k}`] || []).map((photo, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "relative group", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: photo.data, alt: photo.name, className: "w-14 h-14 object-cover rounded border border-gray-200" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                        "button",
-                        {
-                          onClick: () => removeControlPhoto(`${id}-${k}`, idx),
-                          className: "absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
-                          title: "Remove photo",
-                          children: "\xD7"
-                        }
-                      )
-                    ] }, idx)) })
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-3", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "block text-xs font-medium c-text-navy mb-2", children: [
+                        "Optional: Attach Photos",
+                        ((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "ml-2 inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full", children: [
+                          (d.controlPhotos || {})[`${id}-${k}`].length,
+                          " photo",
+                          (d.controlPhotos || {})[`${id}-${k}`].length !== 1 ? "s" : ""
+                        ] })
+                      ] }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex items-center gap-2", children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                          "input",
+                          {
+                            type: "file",
+                            id: `control-photo-${id}-${k}`,
+                            accept: "image/*",
+                            multiple: true,
+                            onChange: (e) => {
+                              handleControlPhotoUpload(`${id}-${k}`, e.target.files);
+                              e.target.value = "";
+                            },
+                            className: "hidden"
+                          }
+                        ),
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                          "input",
+                          {
+                            type: "file",
+                            id: `control-camera-${id}-${k}`,
+                            accept: "image/*",
+                            capture: "environment",
+                            onChange: (e) => {
+                              handleControlPhotoUpload(`${id}-${k}`, e.target.files);
+                              e.target.value = "";
+                            },
+                            className: "hidden"
+                          }
+                        ),
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                          "button",
+                          {
+                            onClick: () => document.getElementById(`control-camera-${id}-${k}`).click(),
+                            className: "flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium",
+                            title: "Take photo with camera",
+                            tabIndex: 0,
+                            children: [
+                              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4" }),
+                              "Take Photo"
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                          "button",
+                          {
+                            onClick: () => document.getElementById(`control-photo-${id}-${k}`).click(),
+                            className: "flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors text-gray-600 text-xs font-medium",
+                            title: "Choose from gallery",
+                            tabIndex: 0,
+                            children: "+ Gallery"
+                          }
+                        )
+                      ] }),
+                      ((d.controlPhotos || {})[`${id}-${k}`] || []).length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "flex flex-wrap gap-2 mt-2", children: ((d.controlPhotos || {})[`${id}-${k}`] || []).map((photo, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "relative group", children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: photo.data, alt: photo.name, className: "w-14 h-14 object-cover rounded border border-gray-200" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                          "button",
+                          {
+                            onClick: () => removeControlPhoto(`${id}-${k}`, idx),
+                            className: "absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
+                            title: "Remove photo",
+                            children: "\xD7"
+                          }
+                        )
+                      ] }, idx)) })
+                    ] })
                   ] })
-                ] })
-              ] }, k);
-            }) })
+                ] }, k);
+              }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 border-dashed c-border-gray rounded p-3 mt-2", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { className: "block text-xs font-semibold c-text-navy mb-1", children: "Additional Controls Not Listed Above" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "text-xs text-gray-500 mb-2", children: [
+                  "Document any other ",
+                  name.toLowerCase(),
+                  " controls present at the facility that aren't covered by the standard options."
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    defaultValue: (d.additionalControlNotes || {})[id] || "",
+                    onBlur: (e) => setAdditionalControlNotes(id, e.target.value),
+                    placeholder: id === "perimeter" ? "e.g., Natural barriers (river, cliff), vegetation management, buried cable detection" : id === "access" ? "e.g., Mantrap entry, biometric readers, tailgate detection" : id === "detection" ? "e.g., Thermal imaging, ground-based radar, acoustic sensors" : id === "hardening" ? "e.g., Blast film on windows, raised equipment platforms, fire suppression" : "e.g., Emergency notification system, mutual aid agreements, incident command procedures",
+                    className: "w-full p-2 border-2 c-border-gray rounded text-xs",
+                    rows: 2
+                  },
+                  `additional-${id}`
+                )
+              ] })
+            ] })
           ] }, id);
         })
       ] });
@@ -23584,21 +24194,145 @@
           }) })
         ] }, category);
       }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 border-dashed c-border-gray rounded-lg p-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { className: "text-sm font-semibold c-text-navy mb-2", children: "Add Custom Threat" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-xs text-gray-500 mb-3", children: "For threats not covered in the categories above (e.g., Workplace Violence, Social Engineering, Cyber-Physical)" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex gap-2", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "input",
+            {
+              type: "text",
+              id: "custom-threat-name",
+              placeholder: "Threat name...",
+              className: "flex-1 p-2 border-2 c-border-gray rounded text-sm",
+              onKeyDown: (e) => {
+                if (e.key === "Enter" && e.target.value.trim()) {
+                  addCustomThreat(e.target.value, document.getElementById("custom-threat-category")?.value || "Custom");
+                  e.target.value = "";
+                }
+              }
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", { id: "custom-threat-category", className: "p-2 border-2 c-border-gray rounded text-sm bg-white", defaultValue: "Custom", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Custom", children: "Custom" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Theft", children: "Theft" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Vandalism and sabotage", children: "Vandalism and sabotage" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Trespassing and unauthorized presence", children: "Trespassing" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Targeted attack", children: "Targeted attack" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "Accidental and environmental", children: "Accidental / Environmental" })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              onClick: () => {
+                const nameInput = document.getElementById("custom-threat-name");
+                const catSelect = document.getElementById("custom-threat-category");
+                if (nameInput && nameInput.value.trim()) {
+                  addCustomThreat(nameInput.value, catSelect?.value || "Custom");
+                  nameInput.value = "";
+                }
+              },
+              className: "px-4 py-2 c-bg-teal text-white rounded text-sm font-medium hover:opacity-90",
+              children: "Add Threat"
+            }
+          )
+        ] })
+      ] }),
+      (d.customThreats || []).length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 c-border-gray rounded-lg overflow-hidden", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "c-bg-light p-4 flex justify-between items-center cursor-pointer", onClick: () => toggle("custom-threats"), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { className: "font-semibold c-text-navy flex items-center gap-2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs", children: "Custom" }),
+            "Custom Threats"
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex items-center space-x-2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-sm text-gray-600", children: [
+              (d.customThreats || []).length,
+              " added"
+            ] }),
+            open["custom-threats"] ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronUp, { className: "w-5 h-5" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: "w-5 h-5" })
+          ] })
+        ] }),
+        open["custom-threats"] && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "p-4 space-y-3 bg-white border-l-4 c-border-teal", children: (d.customThreats || []).map((ct) => {
+          const found = d.threats.find((t) => t.name === ct.name);
+          if (!found) return null;
+          return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-2 c-border-light rounded p-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex items-start justify-between", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "font-medium c-text-navy", children: ct.name }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "ml-2 text-xs text-gray-500", children: [
+                  "(",
+                  ct.category,
+                  ")"
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: () => removeCustomThreat(ct.name), className: "px-2 py-1 rounded-full text-xs font-semibold border bg-red-50 text-red-600 border-red-300 hover:bg-red-100", tabIndex: 0, children: "Remove" })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-3 space-y-4", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-xs text-gray-600 mb-1", children: "Evidence / Indicators" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "space-y-1", children: ["Prior incidents", "Regional trend / High local crime"].map((ev) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "flex items-center space-x-2 text-sm", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      className: "w-3 h-3",
+                      checked: found.evidence.includes(ev),
+                      onChange: (e) => {
+                        const newEv = e.target.checked ? [...found.evidence, ev] : found.evidence.filter((x) => x !== ev);
+                        setEvidence(ct.name, newEv);
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "c-text-navy", children: ev })
+                ] }, ev)) })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "border-t border-gray-100 pt-3", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between items-center mb-2", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-sm font-medium c-text-navy", children: "Threat Likelihood" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xl font-bold c-text-teal", children: [
+                    found.likelihood || 3,
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-sm text-gray-400 font-normal", children: " /5" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "range", min: "1", max: "5", step: "1", value: found.likelihood || 3, onChange: (e) => setThreatLikelihood(ct.name, e.target.value), className: "w-full" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-between text-xs text-gray-500 mt-1", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-left w-16", children: "Rare" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Unlikely" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Possible" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-center", children: "Likely" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-right w-20", children: "Almost Certain" })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-2 text-xs text-gray-600 italic", children: [
+                  found.likelihood === 1 && "Not expected; would require unusual conditions or a highly atypical actor/event.",
+                  found.likelihood === 2 && "Could happen, but not common; limited exposure, access, or motivation.",
+                  (!found.likelihood || found.likelihood === 3) && "Credible and plausible; has occurred in the industry or region with some regularity.",
+                  found.likelihood === 4 && "Expected to occur; frequent exposure, clear opportunity, or known active threat pattern.",
+                  found.likelihood === 5 && "Persistent or imminent; repeated incidents, sustained targeting, or unavoidable conditions."
+                ] })
+              ] })
+            ] })
+          ] }, ct.name);
+        }) })
+      ] }),
       d.threats.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "c-bg-light border-2 c-border-light rounded-lg p-4", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h4", { className: "font-semibold c-text-navy mb-2", children: [
           "Selected Threats (",
           d.threats.length,
           ")"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { className: "text-sm space-y-1", children: d.threats.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { className: "flex items-center space-x-2", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheckBig, { className: "w-4 h-4 text-green-600 flex-shrink-0" }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: t.name }),
-          t.evidence.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xs text-gray-500", children: [
-            "(",
-            t.evidence.join(", "),
-            ")"
-          ] })
-        ] }, t.name)) })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { className: "text-sm space-y-1", children: d.threats.map((t) => {
+          const isCustom = (d.customThreats || []).some((ct) => ct.name === t.name);
+          return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { className: "flex items-center space-x-2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheckBig, { className: "w-4 h-4 text-green-600 flex-shrink-0" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: t.name }),
+            isCustom && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-xs", children: "Custom" }),
+            t.evidence.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "text-xs text-gray-500", children: [
+              "(",
+              t.evidence.join(", "),
+              ")"
+            ] })
+          ] }, t.name);
+        }) })
       ] })
     ] });
     const RiskAnalysis = () => {
@@ -23606,14 +24340,22 @@
       const allControlsFlat = getAllControlsFlat(d.controls);
       const buildDefaultRisk = (threat) => {
         const mapping = THREAT_CONTROL_MAP[threat.name];
+        const isCustom = !mapping;
         const autoControls = mapping?.controls || [];
-        const availableControls = autoControls.filter((ctrlKey) => {
-          const ctrl = allControlsFlat.find((c) => c.key === ctrlKey);
-          return ctrl && ctrl.score > 0;
-        });
-        const subvertical = d.facility.type;
-        const relevantAssetNames = THREAT_ASSET_MAP[subvertical]?.[threat.name] || [];
-        const relevantAssets = presentAssets.filter((a) => relevantAssetNames.includes(a.name));
+        let availableControls;
+        let relevantAssets;
+        if (isCustom) {
+          availableControls = allControlsFlat.filter((c) => c.score > 0).map((c) => c.key);
+          relevantAssets = presentAssets;
+        } else {
+          availableControls = autoControls.filter((ctrlKey) => {
+            const ctrl = allControlsFlat.find((c) => c.key === ctrlKey);
+            return ctrl && ctrl.score > 0;
+          });
+          const subvertical = d.facility.type;
+          const relevantAssetNames = THREAT_ASSET_MAP[subvertical]?.[threat.name] || [];
+          relevantAssets = presentAssets.filter((a) => relevantAssetNames.includes(a.name));
+        }
         return { threat: threat.name, likelihood: threat.likelihood || 3, affectedAssets: relevantAssets, selectedControls: availableControls, treatment: "", estimatedCost: "", priority: "", owner: "", targetDate: "" };
       };
       const getRiskForThreat = (threat) => {
@@ -24130,10 +24872,16 @@
             })()
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "flex justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", { onClick: exportReport, className: "flex items-center space-x-2 c-bg-teal  text-white px-6 py-3 rounded-lg font-semibold transition-colors", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-5 h-5" }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Export Assessment Report" })
-        ] }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "flex justify-center gap-4", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", { onClick: emailAssessmentReport, className: "flex items-center space-x-2 c-bg-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors hover:opacity-90", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Mail, { className: "w-5 h-5" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Email Assessment Report" })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", { onClick: exportReport, className: "flex items-center space-x-2 c-bg-teal text-white px-6 py-3 rounded-lg font-semibold transition-colors hover:opacity-90", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-5 h-5" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Download HTML Report" })
+          ] })
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "c-bg-light border-2 c-border-light rounded-lg p-4 text-center", children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "text-sm text-gray-600", children: [
           "Assessment of ",
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: d.facility.facilityId || "facility" }),
@@ -24573,6 +25321,9 @@
           entityLookupStatus: "idle"
         },
         criticality: { assetPresence: {}, assetScores: {}, assetPhotos: {} },
+        customAssets: [],
+        customThreats: [],
+        additionalControlNotes: {},
         controlPhotos: {},
         controls: {
           perimeter: {
@@ -24640,7 +25391,7 @@
       (0, import_client.createRoot)(document.getElementById("root")).render(/* @__PURE__ */ (0, import_jsx_runtime2.jsx)(App, {}));
     }
   });
-  require_main();
+  return require_main();
 })();
 /*! Bundled license information:
 
@@ -24704,6 +25455,7 @@ lucide-react/dist/esm/icons/circle-check-big.js:
 lucide-react/dist/esm/icons/download.js:
 lucide-react/dist/esm/icons/eye.js:
 lucide-react/dist/esm/icons/lock.js:
+lucide-react/dist/esm/icons/mail.js:
 lucide-react/dist/esm/icons/shield.js:
 lucide-react/dist/esm/icons/triangle-alert.js:
 lucide-react/dist/esm/lucide-react.js:
@@ -24725,6 +25477,14 @@ react/cjs/react-jsx-runtime.development.js:
    * LICENSE file in the root directory of this source tree.
    *)
 */
+
+// Mount the app
+const { createRoot } = App;
+if (createRoot && App.default) {
+  createRoot(document.getElementById('root')).render(
+    App.React.createElement(App.default)
+  );
+}
   </script>
 </body>
 </html>
